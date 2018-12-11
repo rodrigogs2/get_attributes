@@ -103,6 +103,14 @@ def build_txt_filename_from_3d_image(input_full_filename, output_directory=None)
     # ENDED    
     return txt_full_filename
     
+
+def check_txt_exists(input_full_filename, output_directory):
+    txt_file = build_txt_filename_from_3d_image(input_full_filename, output_directory)
+    return os.path.exists(txt_file)
+
+
+
+
     
 def save_slice_as_png(nii_img_full_filename, slicenum, axisnum, output_directory, show_image=False):
     
@@ -259,32 +267,39 @@ def extract_attributes_from_file(nii_img_full_filename,
                 os.remove(txt_file)
             except os.error:
                 raise ValueError("*** File %s already exists but can not be removed.", txt_file)
-                
     
-    # Main loop (core task)
-    for axis_number in range(total_used_axis): # picking a axis
-        total_slices = nii_img.shape[axis_number] # picking total slices for selected axis
-        for slice_number in range(total_slices): # picking a valid slice
-            
-            saved_png_full_filename = save_slice_as_png(nii_img_full_filename, slice_number, axis_number, output_directory)
-            
-            # getting image attributes (zernick pm and haralick stats)
-            attribs = get_attributes(saved_png_full_filename)
-            
-            # appending attrbiutes to txt file
-            append_attributes_to_file(nii_img_full_filename, attribs, axis_number, slice_number, output_directory)
-            
-            # verbose print
-            if verbose==True:
-                print("Getting slice ", slice_number, "inside body axis " , axis_number)
-                print("\nAttributes (slice=%s,axis=%s): " % (slice_number, axis_number))
-                print(attribs)
-            #else:
-                #print('.', end='')
-            
-            # Check whether cache files must be kept
-            if not keep_png_cache_files:
-                os.remove(saved_png_full_filename)
+    else:
+        if not os.path.exists(txt_file):
+           
+            # Main loop (core task)
+            for axis_number in range(total_used_axis): # picking a axis
+                total_slices = nii_img.shape[axis_number] # picking total slices for selected axis
+                for slice_number in range(total_slices): # picking a valid slice
+                    
+                    saved_png_full_filename = save_slice_as_png(nii_img_full_filename, slice_number, axis_number, output_directory)
+                    
+                    # getting image attributes (zernick pm and haralick stats)
+                    attribs = get_attributes(saved_png_full_filename)
+                    
+                    # appending attrbiutes to txt file
+                    append_attributes_to_file(nii_img_full_filename, attribs, axis_number, slice_number, output_directory)
+                    
+                    # verbose print
+                    if verbose==True:
+                        print("Getting slice ", slice_number, "inside body axis " , axis_number)
+                        print("\nAttributes (slice=%s,axis=%s): " % (slice_number, axis_number))
+                        print(attribs)
+                    #else:
+                        #print('.', end='')
+                    
+                    # Check whether cache files must be kept
+                    if not keep_png_cache_files:
+                        os.remove(saved_png_full_filename)
+                
+        else:
+            print("*** File %s already exists: giving up extraction for this file...", txt_file)
+    
+    
             
 def list_files(input_dir,extention=".nii"):
     returned_files = []
