@@ -247,61 +247,71 @@ def extract_attributes_from_file(nii_img_full_filename,
                           #extract_attributes=False, 
                           verbose=False,
                           reset_output_file=True,
-                          limit_precision=True):
+                          limit_precision=True,
+                          testing=False):
     
     nii_img = nb.load(nii_img_full_filename)
     
-    total_used_axis = 3
+    if verbose:
+        print ("Initializing attributes extraction from file: %s" % nii_img_full_filename)
+    
+    if testing:
+        total_used_axis = 1
+    else:
+        total_used_axis = 3
     
     #slices_to_extract = 0
     #all_axis = nii_img.shape
     #for size in all_axis:
         #slices_to_extract = slices_to_extract + size
     
+    # Building correct filename for txt output file
+    txt_file = build_txt_filename_from_3d_image(
+                nii_img_full_filename,output_directory)
+    
+    if verbose:
+        print("    Output file will be: %s" % txt_file)
+    
     # Testing if output file should be removed
     if reset_output_file:
-        txt_file = build_txt_filename_from_3d_image(
-                nii_img_full_filename,output_directory)
         if os.path.exists(txt_file):
             try:
                 os.remove(txt_file)
             except os.error:
                 raise ValueError("*** File %s already exists but can not be removed.", txt_file)
     
-    else:
-        if not os.path.exists(txt_file):
-           
-            # Main loop (core task)
-            for axis_number in range(total_used_axis): # picking a axis
-                total_slices = nii_img.shape[axis_number] # picking total slices for selected axis
-                for slice_number in range(total_slices): # picking a valid slice
-                    
-                    saved_png_full_filename = save_slice_as_png(nii_img_full_filename, slice_number, axis_number, output_directory)
-                    
-                    # getting image attributes (zernick pm and haralick stats)
-                    attribs = get_attributes(saved_png_full_filename)
-                    
-                    # appending attrbiutes to txt file
-                    append_attributes_to_file(nii_img_full_filename, attribs, axis_number, slice_number, output_directory)
-                    
-                    # verbose print
-                    if verbose==True:
-                        print("Getting slice ", slice_number, "inside body axis " , axis_number)
-                        print("\nAttributes (slice=%s,axis=%s): " % (slice_number, axis_number))
-                        print(attribs)
-                    #else:
-                        #print('.', end='')
-                    
-                    # Check whether cache files must be kept
-                    if not keep_png_cache_files:
-                        os.remove(saved_png_full_filename)
+    if not os.path.exists(txt_file): # run extraction only when outputfile doesn't exist
+        
+        # Main loop (core task)
+        for axis_number in range(total_used_axis): # picking a axis
+            total_slices = nii_img.shape[axis_number] # picking total slices for selected axis
+            for slice_number in range(total_slices): # picking a valid slice
                 
-        else:
-            print("*** File %s already exists: giving up extraction for this file...", txt_file)
-    
+                saved_png_full_filename = save_slice_as_png(nii_img_full_filename, slice_number, axis_number, output_directory)
+                
+                # getting image attributes (zernick pm and haralick stats)
+                attribs = get_attributes(saved_png_full_filename)
+                
+                # appending attrbiutes to txt file
+                append_attributes_to_file(nii_img_full_filename, attribs, axis_number, slice_number, output_directory)
+                
+                # verbose print
+                if verbose==True:
+                    print("Getting slice ", slice_number, "inside body axis " , axis_number)
+                    print("\nAttributes (slice=%s,axis=%s): " % (slice_number, axis_number))
+                    print(attribs)
+                #else:
+                    #print('.', end='')
+                
+                # Check whether cache files must be kept
+                if not keep_png_cache_files:
+                    os.remove(saved_png_full_filename)
+    else:
+        if verbose:
+            print("File %s already exist so their attributes will not be extracted" % txt_file)
     
             
-def list_files(input_dir,extention=".nii"):
+def old_list_files(input_dir,extention=".nii"):
     returned_files = []
     dir_files = os.listdir(input_dir)
     for filename in dir_files:
@@ -314,6 +324,19 @@ def list_files(input_dir,extention=".nii"):
         
     return returned_files
 
+def list_files(input_dir,extention=".nii"):
+    returned_files = []
+    for root, dirs, files in os.walk(input_dir,topdown=False):
+        for filename in files:
+            name,ext = os.path.splitext(filename)
+            if ext == extention:
+                full_filename = os.path.join(root,filename)
+                if os.path.isfile(full_filename):
+                    returned_files.append(full_filename)
+            
+    return returned_files
+
+
 def extract_attributes_from_dir(input_directory, 
                                 output_directory,
                                 keep_png_cache_files=False,
@@ -325,6 +348,10 @@ def extract_attributes_from_dir(input_directory,
 
     files = list_files(input_directory,".nii")
     
+    if verbose:
+        print("Files to be processed: ", files)
+        
+    reset_output_file
     if not multi_cpu:
         for filename in files:
             extract_attributes_from_file(filename,
@@ -386,8 +413,9 @@ def display_help(script_name=None):
 
     print ('Usage:\n    ', script_name, '[Options] -i <inputfile> -o <outputdir> ')
     print ('  Options:')
-    print('\t--multicpu=True\tset on computation over all cores (default multicore is off)')
-    print('\t--verbose=True\tenables verbose mode (default verbose is disabled)')
+    print('\t-m, --multicpu\tset on computation over all cores (default: multicore is off)')
+    print('\t-v, --verbose\tenables verbose mode (default: disabled)')
+    print('\t-r, --resume\tresume extraction: output files are not overwritten (default: resume is off)')
 
 def main(argv):
     inputfile = ''
@@ -396,9 +424,10 @@ def main(argv):
     ofile_ok = False
     verbose_ok = False
     multi_cpu_ok = False
+    reset_txt_file_ok = True
     
     try:
-        opts, args = getopt.getopt(argv[1:],"hi:o:vm",["ifile=","odir=","verbose","multicpu"]) 
+        opts, args = getopt.getopt(argv[1:],"hi:o:vmr",["ifile=","odir=","verbose","multicpu","reset_output_file"]) 
     except getopt.GetoptError:
         display_help()
         sys.exit(1)
@@ -416,6 +445,8 @@ def main(argv):
             verbose_ok = True
         elif opt in ("-m", "--multicpu"):
             multi_cpu_ok = True
+        elif opt in ("-r", "--resume"):
+            reset_txt_file_ok = False
     
     if ifile_ok and ofile_ok:
         print ('Output directory is: ', outputdir)
@@ -423,7 +454,8 @@ def main(argv):
         extract_attributes(input_path=inputfile,
                            output_directory=outputdir,
                            verbose=verbose_ok,
-                           multi_cpu=multi_cpu_ok)
+                           multi_cpu=multi_cpu_ok,
+                           reset_output_file=reset_txt_file_ok)
         
     else:
         display_help()

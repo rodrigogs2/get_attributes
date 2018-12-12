@@ -21,5 +21,19 @@ def list_files(input_dir,extention=".nii"):
         
     return returned_files
 
-i_dir = "/home/rodrigo/Downloads/"
-print("\n .nii files inside dir: %s" % list_files(i_dir))
+def new_list_files(input_dir,extention=".nii"):
+    returned_files = []
+    for root, dirs, files in os.walk(input_dir,topdown=False):
+        for filename in files:
+            name,ext = os.path.splitext(filename)
+            if ext == extention:
+                full_filename = os.path.join(root,filename)
+                #print(full_filename)
+                if os.path.isfile(full_filename):
+                    returned_files.append(full_filename)
+            
+    return returned_files
+
+
+i_dir = "/home/rodrigo/Downloads/fake_dir.nii/"
+print("\n .nii files inside dir:" , new_list_files(i_dir))
