@@ -1,5 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+
+# Updates:
+# 2019, Jan 17: função de escrever os atributos em cada linha do arquivo 
+# (append_attributes_to_file)foi modificada para evitar que cada linha termine 
+# com uma virgula sem nenhum dado após ela. 
+# obs.: ainda não testado
+
 """
 Created on Sat Nov  3 18:53:17 2018
 
@@ -203,6 +210,8 @@ def get_attributes(png_full_filename):
     return attributes(png_full_filename)
 
 
+# Updated on 2019, Jan 17: to resolve problem where each file line ends with a comma (,).
+    # Resolution are not tested yet
 def append_attributes_to_file(
         nii_img_full_filename, 
         attributes, 
@@ -236,13 +245,17 @@ def append_attributes_to_file(
                                                       output_directory)
     try :
         output_file = open(txt_full_filename,mode)
-        output_file.write('%d,%d,' % (axis_num, slice_num))
+        # writting body axis and slice values
+        #output_file.write('%d,%d,' % (axis_num, slice_num))
+        output_file.write('{0:1d},{1:3d}'.format(axis_num, slice_num))
+        
+        # writtings attribs one by one
         for attrib in attributes:
-            if limit_precision:
-                output_file.write("{0:.8f}".format(attrib))
-            else:
-                output_file.write(attrib)
-            output_file.write(',')
+            if attrib != "" or attrib != None or attrib != '\n':
+                if limit_precision:
+                    output_file.write(",{0:.8f}".format(attrib))
+                else:
+                    output_file.write(',{0}'.format(attrib))
             
         output_file.write('\n')
         output_file.close()

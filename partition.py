@@ -13,7 +13,7 @@ Created on Wed Dec 12 11:23:05 2018
 @author: rodrigo
 """
 
-import os, csv, sys, re
+import os, csv, sys 
 import numpy as np
 import list_dir
 
@@ -37,7 +37,8 @@ def load_attribs_and_metadata(attributes_file):
     body_plane_list = []
     slicenum_list = []
     attributes_list = []
-        
+    output_class= []
+    
     if os.path.exists(attributes_file):
         try:
             with open(attributes_file, 'r') as file:
@@ -51,7 +52,7 @@ def load_attribs_and_metadata(attributes_file):
             print("*** ERROR: Attributes file %s can not be readed (os.error in load_attribs function)" % attributes_file)
     
     attribs_as_floats_lists = []
-    #print("*** Processing attributes file %s)" % attributes_file)
+    print("*** Processing attributes file %s)" % attributes_file)
     for attribs_as_string in attributes_list:
         #print("Attribs as strings: ", attribs_as_string)
         a = []
@@ -82,73 +83,6 @@ def load_attribs_and_metadata(attributes_file):
     
     return  attribs, body_plane, slice_numbers, slice_amount
 
-def build_classes_dictionary(csv_file):
-    alzheimer_dic = {'CN': 0, 'MCI': 1, 'AD': 2}
-    dic = {}
-
-    if os.path.exists(csv_file):
-        try:
-            with open(csv_file, 'r') as file:
-                #print('CSV File received: ', csv_file)
-                reader = csv.reader(file)
-                headers = next(reader) 
-                for row in reader:
-                    image_id = 'I' + row[3]
-                    image_class = alzheimer_dic[row[5]]
-                    dic[image_id] = image_class
-        except os.error:
-            print("*** ERROR: The csv file %s can not be readed (os.error in build_classes_dictionary)" % csv_file)    
-
-    else:
-        message = str("file %s does not exist!" % csv_file)
-        raise ValueError(message)
-    return dic
-
-def get_class(attributes_file, all_classes_dictionary):
-    image_id = re.findall(r'I[0-9]+',attributes_file)
-    image_class = None
-    
-    if len(image_id) > 0:
-        image_class = all_classes_dictionary[image_id[0]]
-    return image_class
-
-
-def load_all_data(attributes_dir, csv_file):
-    all_attribs = []
-    all_body_planes = []
-    all_slice_num = []
-    all_slice_amounts = []
-    all_classes = []
-    
-    dic = build_classes_dictionary(csv_file)
-    
-    # Getting all attributes files from attributes directory
-    attribs_files = list_dir.list_files(attributes_dir,".txt")
-    
-    # Loop which loads attributes, classes values and slicing info
-    for file in attribs_files:
-        attribs,body_plane,slice_num,slice_amounts = load_attribs_and_metadata(file)
-        all_attribs.append(attribs)
-        all_body_planes.append(body_plane)
-        all_slice_num.append(slice_num)
-        all_slice_amounts.append(slice_amounts)  
-        image_class = get_class(file,dic)
-        all_classes.append(image_class)
-        
-    
-    return all_attribs, all_body_planes, all_slice_num, all_slice_amounts, all_classes
-
-    # getting partition from 80 to 100th slice from the f-th (f=0) attribs file
-    #partition = get_attributes_from_a_range_of_slices(attribs,slice_amounts,p,fs,ls)
-    #print('\n-Shape of Attributes Partition of the {0}th data file from the slices {2} and {3}: {1}'.format(f,partition.shape,fs,ls))
-    
-    #first = fs
-    #for at in partition:
-    #    print('\n-Attributes from {1}th slice of the {2}th attribs file:\n{0}'.format(at,first,f))
-    #    first = first + 1
-    
-    #print('\nPartition:\n{0}'.format(partition))
-
 
 def load_reshaped_attribs_and_metadata(attributes_file):
     attribs,body_plane,slice_numbers,slice_amount = load_attribs_and_metadata(attributes_file)
@@ -164,13 +98,12 @@ def get_attributes_from_a_slice(image_attribs,
 
     if specific_body_plane != 0:
         plane1_start = slice_amounts[0]
-        
         if specific_body_plane == 1:
             index = index + plane1_start
         else:
             plane2_start = plane1_start + slice_amounts[1]
             index = index + plane2_start
-
+    
     return image_attribs[index]
     
     '''
@@ -194,17 +127,14 @@ def get_attributes_from_a_range_of_slices(image_attribs,
                                         slice_amounts,
                                         specific_body_plane,
                                         start_slice,
-                                        total_slices):
+                                        slices_range):
     attributes_list = []
-    for s in range(start_slice, start_slice + total_slices):
-        attributes_list.append(get_attributes_from_a_slice(image_attribs,
-                                                           slice_amounts,
-                                                           specific_body_plane,
-                                                           s))
+    for s in range(start_slice, start_slice + slices_range):
+        attributes_list.append(get_attributes_from_a_slice(image_attribs,slice_amounts,specific_body_plane,s))
     
     return np.array(attributes_list, dtype=np.float64)
 
-
+'''
 def get_slices_limits(all_slice_amounts):
     plane0_min, plane1_min, plane2_min = 0,0,0
     for slice_amounts in all_slice_amounts:
@@ -217,19 +147,13 @@ def get_slices_limits(all_slice_amounts):
     return plane0_min, plane1_min, plane2_min
 
 
-def get_attributes_partition(all_attribs, 
-                         all_slice_amounts,
+def get_attributes_partition( image_attribs, 
+                         body_planes, 
+                         slice_numbers,
+                         slice_amounts,
                          specific_body_plane, 
                          initial_slice_num, 
-                         total_slices=1):
-    attribs_partition = []
-    for attribs,s_amount in all_attribs,all_slice_amounts:
-        attribs_partition.append(get_attributes_from_a_range_of_slices(attribs,
-                                                                       s_amount,
-                                                                       specific_body_plane,
-                                                                       start_slice,
-                                                                       total_slices))
-    
+                         end_slice_num=None):
     plane0_start = 0
     plane0_end = slice_amounts[0]
     plane1_start = slice_amounts[0]
@@ -238,9 +162,8 @@ def get_attributes_partition(all_attribs,
     plane2_end = plane2_start + slice_amounts[2]
     
     
-    
     return 0
-
+'''
 
 
 def display_help(script_name=None):
@@ -259,23 +182,8 @@ def main(argv):
     
     # Use this arguments to set the input directory of attributes files
     attributes_dir = "/home/rodrigo/Downloads/fake_output_dir2/"
-    csv_file = '/home/rodrigo/Documents/_phd/csv_files/ADNI1_Complete_All_Yr_3T.csv' 
+    
     # Getting all files
-    
-    attribs, body_planes, slice_num, slice_amounts, output_classes = load_all_data(attributes_dir, csv_file)
-    
-    bplane = 2
-    start_slice = 123
-    total_slices = 25
-    
-    croped_attribs = get_attributes_from_a_range_of_slices(attribs[0], 
-                                                           slice_amounts[0], 
-                                                           bplane, 
-                                                           start_slice, 
-                                                           total_slices)
-    
-    print('shape of croped_attribs: ',croped_attribs.shape)
-    '''
     attribs_files = list_dir.list_files(attributes_dir,".txt")
     
     # Checking how many files were found
@@ -308,15 +216,15 @@ def main(argv):
     
     print('\t-Total memory usage to load all the {0} data files is:\n\t\t{1} bytes'.format(total_printed_files, total_memory_usage))
     
-    f = 0
+    f = 53
     attribs,body_plane,slice_num,slice_amounts = load_attribs_and_metadata(attribs_files[f])
     p = 0  # plane of human body (can be 0, 1 or 2)
     fs = 80 # first slice of interval
-    ls = 100 # last slice of interval 
+    sr = 15 # last slice of interval 
     
     # getting partition from 80 to 100th slice from the f-th (f=0) attribs file
-    partition = get_attributes_from_a_range_of_slices(attribs,slice_amounts,p,fs,ls)
-    print('\n-Shape of Attributes Partition of the {0}th data file from the slices {2} and {3}: {1}'.format(f,partition.shape,fs,ls))
+    partition = get_attributes_from_a_range_of_slices(attribs,slice_amounts,p,fs,sr)
+    print('\n-Shape of Attributes Partition of the {0}th data file from the slices {2} and {3}: {1}'.format(f,partition.shape,fs,sr))
     
     first = fs
     for at in partition:
@@ -324,7 +232,6 @@ def main(argv):
         first = first + 1
     
     print('\nPartition:\n{0}'.format(partition))
-    '''
     
 if __name__ == "__main__":    
     main(sys.argv)

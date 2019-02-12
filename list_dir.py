@@ -33,7 +33,3 @@ def new_list_files(input_dir,extention=".nii"):
                     returned_files.append(full_filename)
             
     return returned_files
-
-
-i_dir = "/home/rodrigo/Downloads/fake_dir.nii/"
-print("\n .nii files inside dir:" , new_list_files(i_dir))
