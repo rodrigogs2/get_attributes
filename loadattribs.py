@@ -135,8 +135,9 @@ def load_all_data(attributes_dir, csv_file):
         image_class = get_class(file,dic)
         all_classes.append(image_class)
         
+    array_all_classes = np.array(all_classes, dtype=np.int64)
     
-    return all_attribs, all_body_planes, all_slice_num, all_slice_amounts, all_classes
+    return all_attribs, all_body_planes, all_slice_num, all_slice_amounts, array_all_classes
 
     # getting partition from 80 to 100th slice from the f-th (f=0) attribs file
     #partition = get_attributes_from_a_range_of_slices(attribs,slice_amounts,p,fs,ls)
@@ -223,23 +224,21 @@ def get_attributes_partition(all_attribs,
                          initial_slice_num, 
                          total_slices=1):
     attribs_partition = []
-    for attribs,s_amount in all_attribs,all_slice_amounts:
+    for attribs,s_amount in zip(all_attribs,all_slice_amounts):
         attribs_partition.append(get_attributes_from_a_range_of_slices(attribs,
                                                                        s_amount,
                                                                        specific_body_plane,
-                                                                       start_slice,
+                                                                       initial_slice_num,
                                                                        total_slices))
     
-    plane0_start = 0
-    plane0_end = slice_amounts[0]
-    plane1_start = slice_amounts[0]
-    plane1_end = plane1_start + slice_amounts[1]
-    plane2_start = plane1_end
-    plane2_end = plane2_start + slice_amounts[2]
+#    plane0_start = 0
+#    plane0_end = slice_amounts[0]
+#    plane1_start = slice_amounts[0]
+#    plane1_end = plane1_start + slice_amounts[1]
+#    plane2_start = plane1_end
+#    plane2_end = plane2_start + slice_amounts[2]
     
-    
-    
-    return 0
+    return np.array(attribs_partition, dtype=np.float64)
 
 
 
