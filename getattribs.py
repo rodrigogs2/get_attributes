@@ -456,6 +456,7 @@ def display_help(script_name=None):
     print('\t-r, --resume\tresume extraction: output files are not overwritten (default: resume is off)')
 
 def main(argv):
+    '''
     # lixo
     attributes_dir = "/home/rodrigo/Downloads/fake_dir.nii/"
     nii_file = "/home/rodrigo/Downloads/fake_dir.nii/ADNI_136_S_0184_MR_MPR____N3__Scaled_Br_20090708094745554_S64785_I148265.nii"
@@ -475,6 +476,7 @@ def main(argv):
     print("")
     
     #fim do lixo
+    '''
     
     inputfile = ''
     outputdir = ''
