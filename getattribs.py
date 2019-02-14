@@ -164,10 +164,12 @@ def save_slice_as_png(nii_img_full_filename, slicenum, axisnum, output_directory
             print ('*** ERROR: Output directory (%s) can not be created\n' % output_directory)
             sys.exit(1)
     
-    nii_img = nb.load(nii_img_full_filename)
-    nii_img_data = nii_img.get_fdata()
-    # Get a slice and show it
     
+    nii_img = nb.load(nii_img_full_filename)
+    
+    nii_img_data = nii_img.get_fdata()
+
+    # Get a slice and show it
     img_slice = get_slice_data(nii_img_data, slicenum, axisnum)
     
     # Show image
@@ -323,10 +325,19 @@ def extract_attributes_from_file(nii_img_full_filename,
         # Main loop (core task)
         for axis_number in range(total_used_axis): # picking a axis
             total_slices = nii_img.shape[axis_number] # picking total slices for selected axis
-            for slice_number in range(total_slices): # picking a valid slice
-                
-                saved_png_full_filename = save_slice_as_png(nii_img_full_filename, slice_number, axis_number, output_directory)
-                
+
+            # Update 14/02/2019: Next line is disabled because the next
+            # try/except block was incluced to solve issues with corrupted 
+            # nii image files
+            #saved_png_full_filename = save_slice_as_png(nii_img_full_filename, slice_number, axis_number, output_directory)
+ 
+            # Updated at 14/02/2019: try/except block included to solve 
+            # issues with corrupted nii image files
+            try:
+
+                for slice_number in range(total_slices): # picking a valid slice
+                    saved_png_full_filename = save_slice_as_png(nii_img_full_filename, slice_number, axis_number, output_directory)
+               
                 # getting image attributes (zernick pm and haralick stats)
                 attribs = get_attributes(saved_png_full_filename)
                 
@@ -344,6 +355,12 @@ def extract_attributes_from_file(nii_img_full_filename,
                 # Check whether cache files must be kept
                 if not keep_png_cache_files:
                     os.remove(saved_png_full_filename)
+ 
+               
+            except os.error:
+                print("\n * ERROR: File {0} can not be readed fully. Can it be corrupted? (def extract_attributes_from_file())".format(nii_img_full_filename))
+                break
+
     else:
         if verbose:
             print("File %s already exist so their attributes will not be extracted" % txt_file)
