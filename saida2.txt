@@ -1,0 +1,8 @@
+Output directory is:  ../../attributes2
+Input file is:  ../../Nii_files/
+
+ * ERROR: File ../../Nii_files/ADNI1_Complete_1Yr_3T/ADNI/016_S_0769/MPR__GradWarp__B1_Correction__N3__Scaled/2007-03-21_14_17_54.0/S28899/ADNI_016_S_0769_MR_MPR__GradWarp__B1_Correction__N3__Scaled_Br_20071229173837136_S28899_I86309.nii can not be readed fully. Can it be corrupted? (def extract_attributes_from_file())
+
+ * ERROR: File ../../Nii_files/ADNI1_Complete_1Yr_3T/ADNI/016_S_0769/MPR__GradWarp__B1_Correction__N3__Scaled/2007-03-21_14_17_54.0/S28899/ADNI_016_S_0769_MR_MPR__GradWarp__B1_Correction__N3__Scaled_Br_20071229173837136_S28899_I86309.nii can not be readed fully. Can it be corrupted? (def extract_attributes_from_file())
+
+ * ERROR: File ../../Nii_files/ADNI1_Complete_1Yr_3T/ADNI/016_S_0769/MPR__GradWarp__B1_Correction__N3__Scaled/2007-03-21_14_17_54.0/S28899/ADNI_016_S_0769_MR_MPR__GradWarp__B1_Correction__N3__Scaled_Br_20071229173837136_S28899_I86309.nii can not be readed fully. Can it be corrupted? (def extract_attributes_from_file())

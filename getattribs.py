@@ -338,28 +338,29 @@ def extract_attributes_from_file(nii_img_full_filename,
                 for slice_number in range(total_slices): # picking a valid slice
                     saved_png_full_filename = save_slice_as_png(nii_img_full_filename, slice_number, axis_number, output_directory)
                
-                # getting image attributes (zernick pm and haralick stats)
-                attribs = get_attributes(saved_png_full_filename)
+                    # getting image attributes (zernick pm and haralick stats)
+                    attribs = get_attributes(saved_png_full_filename)
+                    
+                    # appending attributes to txt file
+                    append_attributes_to_file(nii_img_full_filename, attribs, axis_number, slice_number, output_directory)
                 
-                # appending attrbiutes to txt file
-                append_attributes_to_file(nii_img_full_filename, attribs, axis_number, slice_number, output_directory)
+                    # verbose print
+                    if verbose==True:
+                        print("Getting slice ", slice_number, "inside body axis " , axis_number)
+                        print("\nAttributes (slice=%s,axis=%s): " % (slice_number, axis_number))
+                        print(attribs)
+                    #else:
+                        #print('.', end='')
                 
-                # verbose print
-                if verbose==True:
-                    print("Getting slice ", slice_number, "inside body axis " , axis_number)
-                    print("\nAttributes (slice=%s,axis=%s): " % (slice_number, axis_number))
-                    print(attribs)
-                #else:
-                    #print('.', end='')
-                
-                # Check whether cache files must be kept
-                if not keep_png_cache_files:
-                    os.remove(saved_png_full_filename)
+                    # Check whether cache files must be kept
+                    if not keep_png_cache_files:
+                        os.remove(saved_png_full_filename)
  
                
             except os.error:
                 print("\n * ERROR: File {0} can not be readed fully. Can it be corrupted? (def extract_attributes_from_file())".format(nii_img_full_filename))
-                break
+                #break
+                continue
 
     else:
         if verbose:
@@ -473,27 +474,6 @@ def display_help(script_name=None):
     print('\t-r, --resume\tresume extraction: output files are not overwritten (default: resume is off)')
 
 def main(argv):
-    '''
-    # lixo
-    attributes_dir = "/home/rodrigo/Downloads/fake_dir.nii/"
-    nii_file = "/home/rodrigo/Downloads/fake_dir.nii/ADNI_136_S_0184_MR_MPR____N3__Scaled_Br_20090708094745554_S64785_I148265.nii"
-    
-    attribs = load_image_attributes_from_nii_img(nii_file, attributes_dir)
-    print("* Teste de recarga de arquivo de atributos:\n")
-    print(".Nii file:", nii_file)
-    print("* Directorio do arquivo de atributos:", attributes_dir)
-
-    print("* Origem dos atributos da linha 80: Eixo=%s, Fatia=%s" % (attribs[80][0], attribs[80][1]) )
-    print("Demais atributos dessa linha:")
-    ns = 0
-    for n in attribs[80][2:]:
-        if ns < 5:
-            ns = ns + 1
-            print("%s "% n,end='')
-    print("")
-    
-    #fim do lixo
-    '''
     
     inputfile = ''
     outputdir = ''
@@ -540,38 +520,4 @@ def main(argv):
 if __name__ == "__main__":    
     main(sys.argv)
     
-
-
-"""
-# TEST AREA
-
-# Temporary Variables (should be removed later)
-img_data_shape = ''
-input_full_filename = '/home/rodrigo/Downloads/ADNI_136_S_0184_MR_MPR____N3__Scaled_Br_20090708094745554_S64785_I148265.nii'
-input_filepath,input_filename = os.path.split(input_full_filename)
-input_filename_without_extension = os.path.splitext(input_filename)[0] 
-
-
-fake_output_dir = '/home/rodrigo/Downloads/fake_output_dir2/'
-built_png_filename = build_png_filename_from_slice(input_full_filename, 0, 80, fake_output_dir)
-
-print  ('*** input_file_path=', input_filepath,
-      '\n*** input_filename=', input_filename,
-      '\n*** input filename without extension=', input_filename_without_extension,
-      '\n*** output png filename=', built_png_filename)
-
-save_slice_as_png(input_full_filename,130,1,fake_output_dir)
-
-extract_slices_as_png(input_full_filename,fake_output_dir,verbose=True)
-"""
-
-
-   
-
-
-
-
-
-
-
 
