@@ -10,6 +10,15 @@ Created on Thu Nov 29 10:35:46 2018
 from deap import base, creator, tools
 from random import sample
 import random
+import loadattribs
+
+
+# Use this arguments to set the input directory of attributes files
+#attributes_dir = "/home/rodrigo/Downloads/fake_output_dir2/"
+#csv_file = '/home/rodrigo/Documents/_phd/csv_files/ADNI1_Complete_All_Yr_3T.csv' 
+# Getting all files
+
+#attribs, body_planes, slice_num, slice_amounts, output_classes = load_all_data(attributes_dir, csv_file)
 
 # Definindo classe (tipo) da função de avaliação
 creator.create("FitnessMin", base.Fitness, weights=(-1.0,))
@@ -106,17 +115,17 @@ def print_population_fitness(some_population=pop):
         print("*** ERROR: There is a no evaluated individual on population at least")
 
 # testando criação de instância do tipo Individual
-ind_teste = toolbox.individual()
+#ind_teste = toolbox.individual()
 #print("Teste para criação de Individuo: ", ind_teste)
-
-    
-evaluate(ind_teste,debug=True)
+#evaluate(ind_teste,debug=True)
 
 
-print("\nPopulacao de teste de tamanho", pop_size, ":\n", pop_size, pop)
+#print("\nPopulacao de testede tamanho", pop_size, ":\n", pop)
 
 ## avaliando e imprimindo populacao
 evaluate_population(pop)
+
+
 
 print("\nPopulacao de teste já avaliada:\n", pop)
 print_population_fitness(pop)
