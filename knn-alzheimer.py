@@ -1,11 +1,22 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Wed Jan 30 08:30:02 2019
+Created on Wed Mar 13 08:33:13 2019
 
 @author: rodrigo
 """
 
+import loadattribs
+
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.model_selection import train_test_split
+from sklearn import metrics
+from sklearn.linear_model import LogisticRegression
+import pandas as pd
+import numpy as np
+import sys
+
+'''
 #import matplotlib.pyplot as plt
 import numpy as np
 #from sklearn import datasets
@@ -15,13 +26,6 @@ import numpy as np
 import loadattribs
 
 
-# csv description file
-
-
-# Use this arguments to set the input directory of attributes files
-attributes_dir = "/home/rodrigo/Downloads/fake_output_dir2/"
-
-'''
 # Getting all files names
 attribs_files = list_dir.list_files(attributes_dir,".txt")
 
@@ -56,50 +60,99 @@ print('-Total memory usage to load all the {0} data files is:\n\t\t{1} bytes'.fo
 #attribs,body_plane,slice_num = loadattribs.load_attribs_and_metadata(attribs_files[0])
 '''
 
+def runKNN(data_partition, output_classes, k_value):
+    print('* a partition data shape=',data_partition.shape)
+    new_dimensions = (data_partition.shape[0],
+                      data_partition.shape[1]*data_partition.shape[2])
+    #new_partition = np.reshape(partition,total_groupings new_dimensions)
+    new_partition = np.reshape(data_partition, new_dimensions)
+    print('* DIMENSION for the new partition array=',new_dimensions)
+    print('* the new partition data shape=',new_partition.shape)
+    print('* the output array shape=',output_classes.shape)
+    
+    print('* shape of an input instance retrived from the new partition=', new_partition[0].shape)
 
-csv_file = '/home/rodrigo/Documents/_phd/csv_files/ADNI1_Complete_All_Yr_3T.csv' 
-# load data
-attribs, body_axis, slice_numbers, slice_amounts, output_classes = loadattribs.load_all_data(attributes_dir, csv_file)
+    ## KNN preparation
+    X_pandas = pd.DataFrame(data=new_partition)
+    print('X_pandas=\n',X_pandas)
+    y_pandas = pd.DataFrame(data=np.ravel(output_classes,order='C'))
+    print('y_pandas=\n',y_pandas)
+    print('Counting classes instances=',output_classes)
 
-print('* all data list length=',len(attribs))
-print('* an image attributes shape (retrived from all data)=',attribs[0].shape)
+    # STEP 1: split data between test and train sets
+    X_train, X_test, y_train, y_test = train_test_split(X_pandas, y_pandas, test_size=0.3, random_state=12)
+    
+    # print the shapes of the new X objects
+    print('X_train.shape:', X_train.shape)
+    print('X_test.shape:', X_test.shape)
+    
+    # print the shapes of the new y objects
+    print('y_train.shape:',y_train.shape)
+    print('y_test.shape:',y_test.shape)
+    
+    # STEP 1: adjust shape of y vectors
+    
+    
+    # STEP 2: train the model on the training set
+    knn = KNeighborsClassifier(n_neighbors=k_value)
+    knn.fit(X_train, y_train)
+    
+    # STEP 3: make predictions on the testing set
+    y_pred = knn.predict(X_test)
+    print('y_pred=\n',y_pred)
+    print('y_pred.shape:',y_pred.shape)
+    
+    # compare actual response values (y_test) with predicted response values (y_pred)
+    accuracy = metrics.accuracy_score(y_test, y_pred) 
+    confusion_matrix = metrics.confusion_matrix(y_test,y_pred,labels=None,sample_weight=None)
 
-plane = 1
-first_slice = 70
-total_slices = 5
-partition = loadattribs.get_attributes_partition(attribs,slice_amounts,plane,first_slice,total_slices)
-print('* a partition data shape=',partition.shape)
+    return accuracy, confusion_matrix
 
-new_dimensions = (partition.shape[0],partition.shape[1]*partition.shape[2])
-#new_partition = np.reshape(partition,total_groupings new_dimensions)
-new_partition = np.reshape(partition, new_dimensions)
-print('* DIMENSION for the new partition array=',new_dimensions)
-print('* the new partition data shape=',new_partition.shape)
-print('* the output array shape=',output_classes.shape)
+def main(argv):
+    
+    # KNN Parameters
+    K_VALUE = 5
+    
+    # Use this arguments to set the input directory of attributes files
+    attributes_dir = "/home/rodrigo/Downloads/fake_output_dir2/"
+    csv_file = '/home/rodrigo/Documents/_phd/csv_files/ADNI1_Complete_All_Yr_3T.csv'
+    
+    # Getting all data
+    attribs, body_planes, slice_num, slice_amounts, output_classes = loadattribs.load_all_data(attributes_dir, csv_file)
+    
+    bplane = 2
+    start_slice = 123
+    total_slices = 25
+    
+    # Getting some data partition 
+    data_partition = loadattribs.get_attributes_partition(attribs,
+                                                          slice_amounts,
+                                                          bplane,
+                                                          start_slice,
+                                                          total_slices)
+    
+    accuracy, conf_matrix = runKNN(data_partition, output_classes, K_VALUE)
+    
+    print('Confusion matrix was:\n', conf_matrix)
+    print ('KNN Acurracy with K={0} was: {1}'.format(K_VALUE, accuracy))
+    return 0
+    
+    
 
-print('* shape of an input instance retrived from the new partition=', new_partition[0].shape)
+if __name__ == "__main__":    
+    main(sys.argv)
 
 
-## KNN preparation
-from sklearn.neighbors import KNeighborsClassifier
-from sklearn.model_selection import train_test_split
-from sklearn import metrics
-from sklearn.linear_model import LogisticRegression
 
 #from imblearn.over_sampling import SMOTE, ADASYN
 #from collections import Counter
-import pandas as pd
 
 
-X_pandas = pd.DataFrame(data=new_partition)
-print('X_pandas=\n',X_pandas)
-y_pandas = pd.DataFrame(data=np.ravel(output_classes,order='C'))
-print('y_pandas=\n',y_pandas)
+
 #print('unique(y)=',np.unique(y))
 
 
 
-print('Counting classes instances=',output_classes)
 
 #X, y = SMOTE('auto').fit_resample(new_partition, output_classes)
 
@@ -122,44 +175,6 @@ print('Counting classes instances=',output_classes)
 # STEP 1: split X and y into training and testing sets
 #from sklearn.cross_validation import train_test_split
 #X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.4, random_state=12)
-X_train, X_test, y_train, y_test = train_test_split(X_pandas, y_pandas, test_size=0.4, random_state=12)
-
-# print the shapes of the new X objects
-print('X_train.shape:', X_train.shape)
-print('X_test.shape:', X_test.shape)
-
-# print the shapes of the new y objects
-print('y_train.shape:',y_train.shape)
-print('y_test.shape:',y_test.shape)
-
-# STEP 2: train the model on the training set
-logreg = LogisticRegression(max_iter=1000,solver='lbfgs',multi_class='multinomial')
-logreg.fit(X_train, y_train)
-
-# STEP 3: make predictions on the testing set
-y_pred = logreg.predict(X_test)
-
-# compare actual response values (y_test) with predicted response values (y_pred)
-print('Logistic Regression accuracy=',metrics.accuracy_score(y_test, y_pred))
-
-paramk = 1
-knn = KNeighborsClassifier(n_neighbors=paramk)
-knn.fit(X_train, y_train)
-y_pred = knn.predict(X_test)
-print('KNN (k={0}) accuracy =\t{1}'.format(paramk, metrics.accuracy_score(y_test, y_pred)) )
-
-
-paramk = 5
-knn = KNeighborsClassifier(n_neighbors=paramk)
-knn.fit(X_train, y_train)
-y_pred = knn.predict(X_test)
-print('KNN (k={0}) accuracy =\t{1}'.format(paramk, metrics.accuracy_score(y_test, y_pred)) )
-
-paramk = 21
-knn = KNeighborsClassifier(n_neighbors=paramk)
-knn.fit(X_train, y_train)
-y_pred = knn.predict(X_test)
-print('KNN (k={0}) accuracy =\t{1}'.format(paramk, metrics.accuracy_score(y_test, y_pred)) )
 
 
 

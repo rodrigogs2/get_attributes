@@ -206,7 +206,7 @@ def get_attributes_from_a_range_of_slices(image_attribs,
     return np.array(attributes_list, dtype=np.float64)
 
 
-def get_slices_limits(all_slice_amounts):
+def getSliceLimits(all_slice_amounts):
     min_values = [0,0,0]
     
     for slice_amount in all_slice_amounts:
@@ -215,6 +215,9 @@ def get_slices_limits(all_slice_amounts):
                 min_values[i] = slice_amount[i]
     return min_values
 
+
+def getBplanes(all_slice_amounts):
+    return range(len(all_slice_amounts))
 
 def get_attributes_partition(all_attribs, 
                          all_slice_amounts,
