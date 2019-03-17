@@ -49,6 +49,8 @@ def load_attribs_and_metadata(attributes_file):
                     
         except os.error:
             print("*** ERROR: Attributes file %s can not be readed (os.error in load_attribs function)" % attributes_file)
+        except UnicodeDecodeError:
+            print('Error processing file ({0})'.format(attributes_file))
     
     attribs_as_floats_lists = []
     #print("*** Processing attributes file %s)" % attributes_file)

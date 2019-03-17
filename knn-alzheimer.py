@@ -74,10 +74,12 @@ def runKNN(data_partition, output_classes, k_value):
 
     ## KNN preparation
     X_pandas = pd.DataFrame(data=new_partition)
-    print('X_pandas=\n',X_pandas)
-    y_pandas = pd.DataFrame(data=np.ravel(output_classes,order='C'))
-    print('y_pandas=\n',y_pandas)
-    print('Counting classes instances=',output_classes)
+    #print('X_pandas=\n',X_pandas)
+    #_pandas = pd.DataFrame(data=np.ravel(output_classes,order='C'))
+    y_pandas = pd.DataFrame(data=output_classes)
+    #print('y_pandas=\n',y_pandas)
+    
+    #print('Counting classes instances=',output_classes)
 
     # STEP 1: split data between test and train sets
     X_train, X_test, y_train, y_test = train_test_split(X_pandas, y_pandas, test_size=0.3, random_state=12)
@@ -86,12 +88,15 @@ def runKNN(data_partition, output_classes, k_value):
     print('X_train.shape:', X_train.shape)
     print('X_test.shape:', X_test.shape)
     
+    y_train = np.ravel(y_train)
+    y_test = np.ravel(y_test)
+    
     # print the shapes of the new y objects
     print('y_train.shape:',y_train.shape)
     print('y_test.shape:',y_test.shape)
     
     # STEP 1: adjust shape of y vectors
-    
+    np.ravel(y_train)
     
     # STEP 2: train the model on the training set
     knn = KNeighborsClassifier(n_neighbors=k_value)
@@ -114,26 +119,35 @@ def main(argv):
     K_VALUE = 5
     
     # Use this arguments to set the input directory of attributes files
-    attributes_dir = "/home/rodrigo/Downloads/fake_output_dir2/"
-    csv_file = '/home/rodrigo/Documents/_phd/csv_files/ADNI1_Complete_All_Yr_3T.csv'
+    attributes_dir = "../../attributes"
+    csv_file = './ADNI1_Complete_All_Yr_3T.csv'
     
     # Getting all data
+    print('Loading all atributes data...')
     attribs, body_planes, slice_num, slice_amounts, output_classes = loadattribs.load_all_data(attributes_dir, csv_file)
+    print('...done')
     
-    bplane = 2
+    
+    bplane = 0
     start_slice = 123
-    total_slices = 25
+    total_slices = 8
+    
+    
     
     # Getting some data partition 
+    print('Getting some partition...')
     data_partition = loadattribs.get_attributes_partition(attribs,
                                                           slice_amounts,
                                                           bplane,
                                                           start_slice,
                                                           total_slices)
+    print('...done')
     
+    print('Ready to run knn classifier...')
     accuracy, conf_matrix = runKNN(data_partition, output_classes, K_VALUE)
+    print('...done')
     
-    print('Confusion matrix was:\n', conf_matrix)
+    print('\nConfusion matrix was:\n', conf_matrix)
     print ('KNN Acurracy with K={0} was: {1}'.format(K_VALUE, accuracy))
     return 0
     
