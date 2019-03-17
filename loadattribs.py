@@ -206,17 +206,18 @@ def get_attributes_from_a_range_of_slices(image_attribs,
     return np.array(attributes_list, dtype=np.float64)
 
 
-def get_slices_limits(all_slice_amounts):
-    plane0_min, plane1_min, plane2_min = 0,0,0
-    for slice_amounts in all_slice_amounts:
-        if slice_amounts[0] < plane0_min: 
-            plane0_min = slice_amounts[0]
-        if slice_amounts[1] < plane1_min:
-            plane1_min = slice_amounts[1]
-        if slice_amounts[2] < plane2_min:
-            plane2_min = slice_amounts[2]
-    return plane0_min, plane1_min, plane2_min
+def getSliceLimits(all_slice_amounts):
+    min_values = [0,0,0]
+    
+    for slice_amount in all_slice_amounts:
+        for i in range(3):
+            if slice_amount[i] > min_values[i]: 
+                min_values[i] = slice_amount[i]
+    return min_values
 
+
+def getBplanes(all_slice_amounts):
+    return range(len(all_slice_amounts))
 
 def get_attributes_partition(all_attribs, 
                          all_slice_amounts,
@@ -274,6 +275,8 @@ def main(argv):
                                                            total_slices)
     
     print('shape of croped_attribs: ',croped_attribs.shape)
+    print('cropped attribs:\n',croped_attribs)
+    
     '''
     attribs_files = list_dir.list_files(attributes_dir,".txt")
     

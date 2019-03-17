@@ -508,7 +508,9 @@ def main(argv):
     if ifile_ok and ofile_ok:
         print ('Output directory is: ', outputdir)
         print ('Input file is: ', inputfile)
-        extract_attributes(input_path=inputfile,
+        
+        loadattribs.load_all_data(attribs_dir, csv_file)
+        #extract_attributes(input_path=inputfile,
                            output_directory=outputdir,
                            verbose=verbose_ok,
                            multi_cpu=multi_cpu_ok,
