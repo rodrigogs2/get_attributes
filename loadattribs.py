@@ -213,8 +213,9 @@ def getSliceLimits(all_slice_amounts):
     
     for slice_amount in all_slice_amounts:
         for i in range(3):
-            if slice_amount[i] > min_values[i]: 
-                min_values[i] = slice_amount[i]
+            limit = slice_amount[i] - 1
+            if limit > min_values[i]: 
+                min_values[i] = limit
     return min_values
 
 
