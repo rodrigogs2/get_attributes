@@ -11,7 +11,7 @@ import loadattribs
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.model_selection import train_test_split
 from sklearn import metrics
-from sklearn.linear_model import LogisticRegression
+#from sklearn.linear_model import LogisticRegression
 import pandas as pd
 import numpy as np
 import sys
@@ -63,9 +63,19 @@ print('-Total memory usage to load all the {0} data files is:\n\t\t{1} bytes'.fo
 
 def runKNN(data_partition, output_classes, k_value=5, knn_debug=False):
     if knn_debug: print('* a partition data shape=',data_partition.shape)
-    new_dimensions = (data_partition.shape[0],
-                      data_partition.shape[1]*data_partition.shape[2])
-    #new_partition = np.reshape(partition,total_groupings new_dimensions)
+    
+    # Data preparation
+    try:
+        new_dimensions = (data_partition.shape[0],
+                          data_partition.shape[1]*data_partition.shape[2])
+    except IndexError:
+        print('** IndexValue exception')
+        print('\tdata_partition.shape=',data_partition.shape)
+        print('\output_classes.shape=',output_classes.shape)
+        print('\t')
+        sys.exit(-1)
+    
+    
     new_partition = np.reshape(data_partition, new_dimensions)
     
     if knn_debug: 
@@ -138,19 +148,43 @@ def main(argv):
     print('...done (total time to load: {0})'.format(total_time))
     
     import deap_alzheimer
+    max_slices_values = loadattribs.getSliceLimits(slice_amounts)
+    valid_bplanes = loadattribs.getBplanes(slice_amounts)
+
+    print('Slice Limits:',max_slices_values)
+    print('valid_bplanes=',valid_bplanes)
     
-    bplane, start_slice, total_slices = deap_alzheimer.getRandomSliceGrouping(length=20,
-                                          max_indexes=loadattribs.getSliceLimits(slice_amounts),dbug=True)    
     
+#    def getRandomSliceGrouping(all_slice_amounts,best of mozart
+#                           planes = __DEFAULT_BPLANES,
+#                           max_length = __DEFAULT_MAX_CONSEC_SLICES,
+#                           max_indexes = __DEFAULT_MAX_SLICES_VALUES,    # Maximum value for the first slice index 
+#                           dbug=__DEFAULT_DEBUG):
+    
+    print('Getting a random valid slice grouping...')
+    
+    bplane, start_slice, total_slices = deap_alzheimer.getRandomSliceGrouping(valid_bplanes,
+                                                                              max_length = 30,
+                                                                              max_indexes = max_slices_values,
+                                                                              dbug=False)
+    print('...done')
+    print('slice grouping found:\n\tbplane={0},first_slice={1},total_slices={2}'.format(bplane,start_slice,total_slices))
+    
+    '''
     # testing getRandomSliceGrouping funcion (this can be removed later)
-    for i in range(200):
-        bplane, start_slice, total_slices = deap_alzheimer.getRandomSliceGrouping(length=20,
-                                          max_indexes=loadattribs.getSliceLimits(slice_amounts),dbug=True)    
+    print('*** Testing getRandomSliceGrouping funcion a couple of times (this code block can be removed later):')
+    for i in range(5):
+        bplane, start_slice, total_slices = deap_alzheimer.getRandomSliceGrouping(valid_bplanes,
+                                                                                  max_length = 30,
+                                                                                  max_indexes = max_slices_values,
+                                                                                  dbug=True)
+    '''
     
     start_time = time.time()
+     
     # Getting some data partition 
-    print('Getting some partition...')
-    data_partition = loadattribs.get_attributes_partition(attribs,
+    print('Getting some data partition using this last slice grouping ({0})...'.format((bplane,start_slice,total_slices)))
+    data_partition = loadattribs.getAttribsPartitionFromSingleSlicesGrouping(attribs,
                                                           slice_amounts,
                                                           bplane,
                                                           start_slice,

@@ -8,106 +8,165 @@ Created on Thu Nov 29 10:35:46 2018
 
 #import numpy
 from deap import base, creator, tools, algorithms
-#from random import sample
+#from random import samplei
 import random, sys, os
 import loadattribs 
 import knn_alzheimer
 import getopt
+import time
 
-# Runtime Parameters
-__DEFAULT_DEBUG = False
-__DEFAULT_MULTI_CPU_USAGE = False
+# Globla Slicing Arguments
+#global __ALL_ATTRIBS, __ALL_OUTPUT_VALUES, __BODY_PLANES, __MAX_SLICES_VALUES, __DEFAULT_MAX_CONSEC_SLICES, __DEFAULT_NUMBER_OF_GROUPINGS
 
-# Default Evolutionary Parameters
-__TOURNEAMENT_SIZE = 3
-__MUTATE_INDP = 0.05
-__NUMBER_OF_GENERATIONS = 5
-__POPULATION_SIZE = 10
-__DEFAULT_TARGET_FITNESS = 0.0
+# Global Alzheimer Classification Problem Arguments
+#global __GENES_LOW_LIMITS, __GENES_UP_LIMITS, __DEFAULT_KNN_K_VALUE, __VERBOSE
 
-# Default MRI Slicing Parameters
+# Global Runtime Parameters
+#global __MULTI_CPU_USAGE
+
+# Global Evolutionary Parameters
+#global __TOURNEAMENT_SIZE, __MUTATE_INDP, __CROSSOVER_INDP, __NUMBER_OF_GENERATIONS, __POPULATION_SIZE, __DEFAULT_TARGET_FITNESS, __DEFAULT_WORST_FITNESS
+
+# Slicing Arguments
+__ALL_ATTRIBS = []
+__ALL_OUTPUT_VALUES = []
+__BODY_PLANES = []
+__MAX_SLICES_VALUES = []
+__MIN_SLICES_VALUES = []
 __DEFAULT_MAX_CONSEC_SLICES = 20
-__DEFAULT_MAX_SLICES_VALUES = (255,255,170)
-__DEFAULT_BPLANES = (0,1,2)
 __DEFAULT_NUMBER_OF_GROUPINGS = 1
 
+# Evolutionary arguments
+__GENES_LOW_LIMITS = [0,0,1]
+__GENES_UP_LIMITS = [2,160,20]
+__DEFAULT_KNN_K_VALUE = 7
+__VERBOSE = False
+
+# Runtime Parameters
+__MULTI_CPU_USAGE = False
+
+# Default Evolutionary Parameters
+__TOURNEAMENT_SIZE = 4
+__MUTATE_INDP = 0.10
+__CROSSOVER_INDP = 0.4
+__NUMBER_OF_GENERATIONS = 5
+__POPULATION_SIZE = 20
+__DEFAULT_TARGET_FITNESS = 0.0
+__DEFAULT_WORST_FITNESS = -1.0
+
+
+
+def getRandomPlane(planes = __BODY_PLANES):
+    plane = random.sample(planes,1)[0]
+    return plane
+
+
+
+def getRandomTotalSlices(length = __DEFAULT_MAX_CONSEC_SLICES):
+    possibles_total_slices = list(range(length))
+    total_slices = random.sample(possibles_total_slices, 1)[0]
+    return total_slices
+
+
+
+#def getRandomFirstSlice(plane,
+#                        total_slices,
+#                        sampled_max_index = __MAX_SLICES_VALUES, # Maximum value for the first slice index 
+#                        dbug= __VERBOSE):
+#    
+#    range_first_slice = list(range(abs(max_index - total_slices)))
+#    
+#    first_slice_index = random.sample(range_first_slice,1)[0]
+#    
+#    return 1
 
 # Creates a tuple whichs represents a slice grouping composed by @length
 # consecutives slices
-def getRandomSliceGrouping(planes = __DEFAULT_BPLANES,
-                           length = __DEFAULT_MAX_CONSEC_SLICES,
-                           max_indexes = __DEFAULT_MAX_SLICES_VALUES,
-                           dbug=__DEFAULT_DEBUG):
-    # number of consecutive slices will determine the maximum index for the first slice
-    total_slices = random.sample(range(length),1)[0]
+def buildRandomSliceGrouping(planes, length, max_indexes, dbug):
     
-    # picking just one value from the range of planes
-    plane = random.sample(planes,1)[0]
+    # choosing slice grouping size
+    total_slices = getRandomTotalSlices(length-1) + 1
+    #print('sampled total_slices=',total_slices)
+    
+    #picking a plane
+    plane = getRandomPlane(planes)
+    #print('sampled plane=',plane)
     
     # maximum index to the last slice not considering the number choosen of total slices 
     max_index = max_indexes[plane]
-    
+    #print ('max_index of plane ({0})={1}'.format(plane,max_index))
+        
     # calculing the first slice index based on total of slices that will be used
-    first_slice_index = random.sample(range(max_index - total_slices),1)[0]
+    possibles_indexes_to_first_slice = list(range(abs(max_index - total_slices)))
+    #print ('range_first_slice=',range_first_slice)
     
-    if dbug:
-        print('Choosen plane:',plane)
-        print('Max indexes:',max_indexes)
-        print('Max_index for plane {0}: {1}'.format(plane, max_index))
-        print('first slice index:',first_slice_index)
-        print('total slices:',total_slices)
+    first_slice_index = random.sample(possibles_indexes_to_first_slice ,1)[0]
+    #print('sampled first_slice_index=',first_slice_index)
     
-    return plane, first_slice_index, total_slices
+    return [plane, first_slice_index, total_slices]
 
 
-# Evaluates Slices Groupings represented by a individual instance
-def evaluateSlicesGroupings(slices_groupings,
-                            all_attribs,
-                            all_slice_amounts,
-                            output_classes,
-                            k_value=5,
-                            debug=False):
-    
+def initIndividual(planes = __BODY_PLANES,
+                   length = __DEFAULT_MAX_CONSEC_SLICES,
+                   max_indexes = __MIN_SLICES_VALUES, # Maximum value for the first slice index 
+                   groupings = __DEFAULT_NUMBER_OF_GROUPINGS,
+                   dbug= __VERBOSE):
+   
+    data = []
+    for i in list(range(groupings)):
+        slice_grouping = buildRandomSliceGrouping(planes, length, max_indexes, dbug)
+        data = data + slice_grouping
+        
+    return data
 
+# Evaluates a individual instance represented by Slices Groupings 
+def evaluateSlicesGroupingsKNN(individual, # list of integers
+                               all_attribs,
+                               all_slice_amounts,
+                               output_classes,
+                               k_value=5,
+                               debug=__VERBOSE):
     
     all_groupings_partitions = []
     
     accuracy = 0.0
-    conf_matrix = [[1,0,0],[0,1,0],[0,0,1]]
+    conf_matrix = [[1,0,0],[0,1,0],[0,0,1]] # typical confusion matrix for the Alzheimer classification problem     
     
+    ind_size = len(individual)
     
-    if len(slices_groupings) % 3 == 0:
-        
+    if ind_size % 3 == 0:    
         # Getting and Merging data from all slices groupings
-        for g in range(slices_groupings):
+        #if debug: print('evaluating individual=',individual)
+        for g in list(range(ind_size)):
             if g % 3 == 0:
-                plane = slices_groupings[g]
-                first_slice = slices_groupings[g+1]
-                total_slices = slices_groupings[g+2]
+                plane = individual[g]
+                first_slice = individual[g+1]
+                total_slices = individual[g+2]
                 
                 # Debugging
-                grouping_index = g // 3
-                print('{0}th grouping: plane={1},first_slice={2},total_slices'.format(grouping_index,plane,first_slice,total_slices))
+                #grouping_index = g // 3
+                #if debug: print('{0}th grouping: plane={1},first_slice={2},total_slices={3}'.format(grouping_index,plane,first_slice,total_slices))
                 
-                
-                partition = loadattribs.get_attributes_partition(all_attribs,all_slice_amounts,plane,first_slice,total_slices)
+                partition = loadattribs.getAttribsPartitionFromSingleSlicesGrouping(all_attribs,all_slice_amounts,plane,first_slice,total_slices)
                 all_groupings_partitions.append(partition)
                 
+                g = g + 3
+    else:
+        raise ValueError('Bad format individual: slices grouping length ({0}) must be a multiple of three.\nIndividual = {1}'.format(ind_size,individual))
         
-        # TEMPORARIO!!
-        # ATENCAO!!
-        accuracy, conf_matrix = knn_alzheimer.runKNN(all_groupings_partitions[0], output_classes)
-        # ATENCAO!!
+    
+        
+    # TEMPORARIO!!
+    # ATENCAO!!
+    accuracy = random.random()
+    accuracy, conf_matrix = knn_alzheimer.runKNN(all_groupings_partitions[0], output_classes)
+    # ATENCAO!!
 
     #fitness_value = random.random()
     fitness_value = accuracy
     
     return fitness_value, conf_matrix
 
-
-#def evaluate_population(some_population):
-#    for ind in some_population:
-#        evaluate(ind)
 
 def print_population_fitness(some_population):
     error = False
@@ -119,204 +178,301 @@ def print_population_fitness(some_population):
     if error :
         print("*** ERROR: There is a no evaluated individual on population at least")
 
+def updateLowAndUpLimits():
+    return 0
+
+def updateGeneBounds(bplanes,
+                     slices_limits,
+                     max_consec_slices,
+                     number_of_slices_groupings,
+                     dbug=__VERBOSE):
+        
+        low_limits_per_slice_grouping = [0,0,1]
+        up_limits_per_slice_grouping = [len(bplanes),
+                                        min(slices_limits),
+                                        max_consec_slices]
+        
+        all_up_limits = []
+        all_low_limits = []
+        for n in range(number_of_slices_groupings):
+            all_up_limits = all_up_limits + up_limits_per_slice_grouping
+            all_low_limits = all_low_limits + low_limits_per_slice_grouping
+            
+        global __GENES_LOW_LIMITS
+        global __GENES_UP_LIMITS
+        
+        __GENES_LOW_LIMITS = all_low_limits
+        __GENES_UP_LIMITS = all_up_limits
+        
+        if dbug:
+            print('updating global MUTATE Low Limits...')
+            print('__GENES_LOW_LIMITS: ',__GENES_LOW_LIMITS)
+            print('__GENES_UP_LIMITS: ',__GENES_UP_LIMITS)
+   
+
 
 def run_deap(all_attribs, 
              all_slice_amounts,
              all_output_classes,
-             #possibles_bplanes=__DEFAULT_BPLANES, # usually means the list: (0,1,2)
              max_consecutive_slices=__DEFAULT_MAX_CONSEC_SLICES, # max length of the each slices range
-             number_of_groupings=__DEFAULT_NUMBER_OF_GROUPINGS, # controls how many slices ranges there will be used
-             #target_fitness=__DEFAULT_TARGET_FITNESS, # sets the target fitness that will stop evolution if it was achieved
-             multi_cpu_ok=__DEFAULT_MULTI_CPU_USAGE,
-             verbose=False):
+             number_of_groupings=__DEFAULT_NUMBER_OF_GROUPINGS # controls how many slices ranges there will be used
+             ):
     
-    # Use this arguments to set the input directory of attributes files
-    # attributes_dir = "/home/rodrigo/Downloads/fake_output_dir2/"
-    # csv_file = '/home/rodrigo/Documents/_phd/csv_files/ADNI1_Complete_All_Yr_3T.csv' 
-    # Getting all files
+
     
-    # Getting attributes, slice_amounts and other stuff
-    #attribs, body_planes, slice_num, slice_amounts, output_classes = loadattribs.load_all_data(attribs_dir, csv_file)
+    # Global Variables
+    global __BODY_PLANES
+    global __MAX_SLICES_VALUES
+    global __MIN_SLICES_VALUES
+    global __VERBOSE
+    global __DEFAULT_MAX_CONSEC_SLICES
     
-    # Definindo classe (tipo) da função de avaliação
+    # Updating global variables
+    __BODY_PLANES = loadattribs.getBplanes(all_slice_amounts)
+    __MIN_SLICES_VALUES,__MAX_SLICES_VALUES = loadattribs.getSliceLimits(all_slice_amounts)
+    #__MAX_SLICES_VALUES = loadattribs.getSliceLimits(all_slice_amounts)[0]
+    
+    updateGeneBounds(__BODY_PLANES, __MIN_SLICES_VALUES, __DEFAULT_NUMBER_OF_GROUPINGS, __VERBOSE)
+    
+    print('* Running deap with:')
+    print('\t* max_consecutive_slices=',max_consecutive_slices)
+    print('\t* number_of_groupings=',number_of_groupings)
+    print('\t* __BODY_PLANES=',__BODY_PLANES)
+    print('\t* __MAX_SLICES_VALUES=',__MAX_SLICES_VALUES)
+    print('\t* __MIN_SLICES_VALUES=',__MIN_SLICES_VALUES)
+    print('\t* __VERBOSE=',__VERBOSE)
+    print('\t* __DEFAULT_MAX_CONSEC_SLICES=',__DEFAULT_MAX_CONSEC_SLICES)
+    print('\t* __POPULATION_SIZE=', __POPULATION_SIZE)
+    
+    print('\t* __TOURNEAMENT_SIZE =',__TOURNEAMENT_SIZE)
+    print('\t* __MUTATE_INDP =',__MUTATE_INDP)
+    print('\t* __CROSSOVER_INDP =',__CROSSOVER_INDP )
+    print('\t* __NUMBER_OF_GENERATIONS =',__NUMBER_OF_GENERATIONS)
+    print('\t* __POPULATION_SIZE =',__POPULATION_SIZE )
+    print('\t* __DEFAULT_TARGET_FITNESS =',__DEFAULT_TARGET_FITNESS)
+    print('\t* __DEFAULT_WORST_FITNESS =',__DEFAULT_WORST_FITNESS)
+    
+    # Evolutionary arguments,)
+    print('\t* __GENES_LOW_LIMITS = ',__GENES_LOW_LIMITS)
+    print('\t* __GENES_UP_LIMITS = ',__GENES_UP_LIMITS)
+    print('\t* __DEFAULT_KNN_K_VALUE = ',__DEFAULT_KNN_K_VALUE)
+    print('\t* __VERBOSE = ',__VERBOSE)
+
     creator.create("FitnessMax", base.Fitness, weights=(1.0,))
-    
-    
-    # Para o problema de otimizacao para a escolha dos dados que devem ser usados
-    # na classificacao da Doenca de Alzheimer, um individuo representa uma selecao 
-    # de fatias especificas extraidas de um exame de MRI. A ideia e' descobrir o
-    # conjunto otimo de fatias capaz de promover alta acurracia na classificao dos
-    # exames de imagem entre as classes CN, MCI ou AD. 
-    
-    # Dessa forma, a aptidao (Fitness) do individuo corresponde a acurracia dessa 
-    # classificao para o arranjo de fatias definido pelo individuo.
-    
-    # Definindo classe Inviidual que será composta de dois atributos: 
-    #   i.  array de valores inteiros e 
-    #   ii. um valor de aptidao (fitness)
-    
-    # Usando numpy: 
-    #creator.create("Individual", numpy.ndarray, fitness=creator.FitnessMax)
-    # Usando listas:
     creator.create("Individual", list, fitness=creator.FitnessMax, confusion_matrix=None)
-    
-    # Individuos sao compostos de agrupamentos e cada agrupamento e' corresponde a
-    # uma quantidade especifica de fatias consecutivas extraidas de um dado plano
-    # do corpo humano. Assim, cada um desses agrupamentos e' 
-    # definido como uma tupla de tres numeros inteiros que correspondem a:
-    #   i.  O plano corporal que da origem as fatias
-    #   ii. O indice da primeira fatia do agrupamento 
-    #   iii.O total de fatias conscutivas existente no agrupamento
-    
-    # Quantidade de possiveis planos do corpo
-    possibles_bplanes = loadattribs.getBplanes(all_slice_amounts)
-    #num_bplanes = len(possibles_bplanes)
-    
-    
-    # Numero total de agrupamentos (tuplas) usados para definir o individuo
-    # Note: evaluate values between 1 and 6)
-    # total_groupings = number_of_groupings
-    
-    # Quantidade maxima de fatias consecutivas de cada agrupamento
-    #max_consecutive_slice_amount = max_consecutive_slices
-#    if verbose:
-#        print('* max_consecutive_slices:',max_consecutive_slices)
-#    
-    
-    # Valores maximos dos indices para um fatia existente em cada um dos planos 
-    # do corpo humano
-    slice_limits = loadattribs.getSliceLimits(all_slice_amounts)
-    
-    
-    # Note que o comprimento total do individuo e' definido pelo valor acima 
-    # multiplicado pelo tamanho (3) de cada tupla que representa cada agrupamento
-    if verbose:
-        print('* number_of_groupings', number_of_groupings)
-    
-    # Values used to another data representation
-    #min_slice_num = 0
-    #max_slice_num = 680 # 255 (axial) + 255 (coronario) + 170 (sargital)
-    
-#    pop_size = __POPULATION_SIZE # Definição do tamanho da população
-#    if verbose:
-#        print('* pop_size:',pop_size )
 
     # inicializando toolbox
     toolbox = base.Toolbox()
-    
+
     # registrando funcao que cria uma tupla de valores que define um agrupamento de fatias
-    toolbox.register('slice_range', 
-                     getRandomSliceGrouping, 
-                     possibles_bplanes, # @planes argument
-                     max_consecutive_slices, # @length argument
-                     slice_limits) # @max_indexes argument
+    toolbox.register('init_grouping',
+                     initIndividual,
+                     planes = __BODY_PLANES, 
+                     length = __DEFAULT_MAX_CONSEC_SLICES, 
+                     max_indexes = __MIN_SLICES_VALUES, # Maximum value for the first slice index 
+                     groupings = __DEFAULT_NUMBER_OF_GROUPINGS,
+                     dbug= __VERBOSE)
+    
     
     # registrando alias para a função que cria um objeto do tipo Individuo atraves
-    # da chamada consecutiva por n vezes da funcao ja registrada 'slice_range' 
+    # da chamada consecutiva por n vezes da funcao ja registrada 'init_grouping' 
+
     toolbox.register('individual',
-                     tools.initRepeat,
+                     tools.initIterate,
                      creator.Individual,
-                     toolbox.slice_range,
-                     n=number_of_groupings)
-    
+                     toolbox.init_grouping)
     
     toolbox.register('evaluate',
-                     evaluateSlicesGroupings)
-    
-#                     individual,
-#                     all_attribs,
-#                     all_slice_amounts,
-#                     output_classes,
-#                     k_value=5,
-#                     debug=False)
+                     evaluateSlicesGroupingsKNN,
+                     all_attribs = all_attribs,
+                     all_slice_amounts = all_slice_amounts,
+                     output_classes = all_output_classes,
+                     k_value = __DEFAULT_KNN_K_VALUE,
+                     debug=__VERBOSE)
 #    
             
-    # population bag registry
-    toolbox.register('population_bag',
+    # defining population as a plane list
+    toolbox.register('population',
                      tools.initRepeat,
                      list,
-                     toolbox.individual
-                     )
+                     toolbox.individual)    
     
-    pop = toolbox.population_bag(n=100)
+    # creating initial individuals
+    pop = toolbox.population(n=__POPULATION_SIZE)
     
+    # TEMPORARY
+    global best_ind
+    global best_fit
+    best_fit = -1.0
     
-                
-    #    __MAX_CONSEC_SLICES = 20
-#    __MAX_SLICES_VALUES = (255,255,170)
-#    __BPLANES = (0,1,2)
+    # Evaluate initial population
+    fits_and_matrices = list(map(toolbox.evaluate, pop))
+    for ind, fit_and_matrix_tuple in zip(pop, fits_and_matrices):
+        ind.fitness.values = (fit_and_matrix_tuple[0],)
+        ind.confusion_matrix = fit_and_matrix_tuple[1]
+        
+        # Temporary
+        if ind.fitness.values[0] > best_fit:
+            best_ind = ind
+        
     
+    # evaluating initial individuals
     
-
-    def checkBounds(max_slices_indexes = __DEFAULT_MAX_SLICES_VALUES, 
-                    max_slices_amount = __DEFAULT_MAX_CONSEC_SLICES):
+#    import queue
+#    queue_size = 5
+#    best_inds = queue.Queue(maxsize=queue_size ) # where best individuals are saved in
+#    
+#    for ind in pop:
+#        best_fit = -1 # maximization problem
+#        fitness, conf_matrix = toolbox.evaluate(ind,
+#                                                all_attribs=all_attribs,
+#                                                all_slice_amounts=all_slice_amounts,
+#                                                output_classes=all_output_classes,
+#                                                debug=__VERBOSE)
+#        ind.fitness.values = (fitness,)
+#        ind.confusion_matrix = conf_matrix
+#        
+#        if fitness > best_fit:
+#            best_fit = fitness
+#
+#            if best_inds.full:
+#                ind_out = best_inds.get() # pop from left
+#                
+#            best_inds.put(ind)
+#            
+#            print('New best individual was found!\n best_inds now is:\n',best_inds)
+    
+    toolbox.register("mate", tools.cxUniform, indpb=__CROSSOVER_INDP) # crossing
+    toolbox.register("mutate", tools.mutUniformInt, low=__GENES_LOW_LIMITS, up=__GENES_UP_LIMITS, indpb=__MUTATE_INDP) # mutation
+    toolbox.register("select", tools.selTournament, tournsize=__TOURNEAMENT_SIZE) # selection        
+        
+    
+    def checkBounds(bplanes,
+                          slice_limits = __MIN_SLICES_VALUES,
+                          max_consec_slices = __DEFAULT_MAX_CONSEC_SLICES,
+                          amount_of_groupings = __DEFAULT_NUMBER_OF_GROUPINGS,
+                          dbug = __VERBOSE):
         def decorator(func):
             def wrapper(*args, **kargs):
                 offspring = func(*args, **kargs)
+                
+                # COMENTAR ESTE FOR
                 for child in offspring:
                     for i in range(len(child)):
-                        max_value = 1
-                        min_value = 0
-                        if i % 3 == 0:
+                        max_value = __GENES_UP_LIMITS[i]
+                        min_value = __GENES_LOW_LIMITS[i]
+
+                        if i % 3 == 0: # it's a body plane value!
                             # child[i] value is a body plane number (0,1 or 2)
-                            max_value = 2
-                            min_value = 0
-                        elif i % 3 == 1:
+                            max_value = len(bplanes) - 1 # Last plane
+                            min_value = 0 # first plane
+                            #print('i % 3 == 0, so it\'s a body plane value which is:')
+                        
+                        elif i % 3 == 1: # it's a first slice value!
                             # child[i] value is the first slice index (depends on bplane)
-                            bplane = child[i-1]
-                            max_value = max_slices_indexes[bplane] - max_slices_amount
+                            bplane = child[i-1] # getting actual bplane
+                            max_value = slice_limits[bplane] - max_consec_slices
                             min_value = 0
-                        elif i % 3 == 2:
+                            #print('i % 3 == 1, so it\'s the first slice index value which is:')
+                        
+                        elif i % 3 == 2: # it's a total_slices value!
                             # child[i] value is the total of consecutive slices
-                            max_value = max_slices_amount
-                            min_value = 1 
+                            max_value = max_consec_slices
+                            min_value = 1
+                            #print('i % 3 == 1, so it\'s the consecutive slices amount value which is:')
                         
                         child[i] = (child[i] % (max_value - min_value)) + min_value
-                        # se apos mutacao == 24, 
+                        
+                        #print('child[{0}] is {1}'.format(i,child[i]))
+                        
+                        # Ex.: Se apos mutacao o valor child[i]==24, max==20 e min==1 
                         # valor corrigido = (24 % (20 - 1)) + 1
                         #                   = (5) + 1 = 6
+                        
                         
                 return offspring
             return wrapper
         return decorator
     
-    toolbox.register("mate", tools.cxOnePoint) # crossing
-    toolbox.register("mutate", tools.mutUniformInt, indpb=0.05) # mutation
-    toolbox.register("select", tools.selTournament, tournsize=10) # selection
     
-    toolbox.decorate('mutate',checkBounds())
+    # Building lower and upper bounds to each gene of a individual
+    
+    # Updating global limits for genes
+    #updateGeneBounds(__BODY_PLANES,__MAX_SLICES_VALUES,max_consecutive_slices,number_of_groupings,__VERBOSE)
+    
+    
+    
+    #toolbox.decorate('mate',checkMateBounds(slice_limits, max_consecutive_slices ))#max_slice_values, max_consecutive_slices))
+    toolbox.decorate('mutate',checkBounds(__BODY_PLANES,
+                                          __MIN_SLICES_VALUES, 
+                                          max_consecutive_slices, 
+                                          number_of_groupings, 
+                                          __VERBOSE))
 
-    
-    # Testing
-    #random_slices_grouping(bplanes,max_consecutive_slice_amount,max_slice_values)
-    
-    # definindo alias para a função que cria uma população de N indivíduos aleatórios
-    toolbox.register("population", tools.initRepeat, list, toolbox.individual)
-    
-    pop = toolbox.population(n=__POPULATION_SIZE)
-    
-    # Evaluating initial population individuals
-    fitnesses = list(toolbox.map(toolbox.evaluate, pop))
-    for ind, fit in zip(pop, fitnesses):
-        ind.fitness.values = fit
+    toolbox.decorate('mate',checkBounds(__BODY_PLANES,
+                                          __MIN_SLICES_VALUES, 
+                                          max_consecutive_slices, 
+                                          number_of_groupings, 
+                                          __VERBOSE))
     
     
     ## criando e imprimindo populacao
-    if verbose:
+    if __VERBOSE:
         print('* Initial population with {0} individuals:'.format(len(pop)))
-        for ind in pop: print ('Individual={0} Fitness={1}'.format(ind,ind.fitness.values))
-    if verbose:
+        for ind in pop: print ('Individual={0}\t Fitness={1}'.format(ind,ind.fitness.values[0]))
+    if __VERBOSE:
         print('Done!')
+    
     
     number_of_generations = __NUMBER_OF_GENERATIONS
     
+    
+    print('\n* Initializing evolution along to {0} generations'.format(number_of_generations))
+    
     for gen in range(number_of_generations):
+        print('\n* Initializing {0}th generation...'.format(gen))
+        
+        print('\t* Running variation operators...')
         offspring = algorithms.varAnd(pop, 
                                       toolbox, 
-                                      cxpb=0.5, 
-                                      mutpb=0.1)
-        fits = toolbox.map(toolbox.evaluate,offspring)
+                                      __CROSSOVER_INDP, 
+                                      __MUTATE_INDP)
+        print('\t Done!')
+        
+        print('\n\t* Evaluating offspring...')
+        fits_and_matrices = list(map(toolbox.evaluate,offspring)) # list of (fitness,conf_matrix) tuples
+        print('\t Done!')
+        
+        
     
+        #for child in offspring:
+        #child.fitness.values = fits_and_matrices[0][0]
+            #child.confusion_matrix = fits_and_matrices[]
+        
+        
+        print('\n\t* Updating fitness and confusion matrix of offspring...')
+        for i in range(len(offspring)):
+            # fitness should be a one element tuple
+            fit = fits_and_matrices[i][0]
+            offspring[i].fitness.values = fit, # first tuple element
+            
+            conf_matrix = fits_and_matrices[i][1]
+            offspring[i].confusion_matrix =  conf_matrix # second tuple element
+            
+            
+            # Temporary
+            if fit > best_fit:
+                print('\t New BEST Individual {0} with Fitness={1} was found!'.format(offspring[i],fit))
+                best_fit = fit
+                best_ind = offspring[i]
+            
+        print('\t Done!')
+    
+    print('Evolution process has finished')
+    
+    print('Best Individual Found is: ', best_ind)
+    print('\t* Fitness: ', best_fit)
+    print('\t* Confusion Matrix:\n', best_ind.confusion_matrix)
     
     # testando criação de instância do tipo Individual
     #ind_teste = toolbox.individual()
@@ -334,7 +490,8 @@ def run_deap(all_attribs,
 #
 #    if verbose:
 #        print_population_fitness(pop)
-
+    
+    
 
 # REVISAR!!
 def display_help(script_name=None):
@@ -399,39 +556,53 @@ def main(argv):
         print ('\t* Input CSV file is: {0}'.format(csv_file))
        
         if verbose_ok:
-            import time
             start = time.time()
+            global __VERBOSE
+            __VERBOSE = True
             
-        
+        if multi_cpu_ok:
+            global __MULTI_CPU_USAGE
+            __MULTI_CPU_USAGE = True
+            
         # Loading all data just once
         all_attribs, all_body_planes, all_slice_num, all_slice_amounts, all_output_classes = loadattribs.load_all_data(attribs_dir, csv_file)
         print('Done!')
+        
+        #max_slice_values = loadattribs.getSliceLimits(all_slice_num)
+        max_consecutive_slices = __DEFAULT_MAX_CONSEC_SLICES
 
-        if verbose_ok:
+        if __VERBOSE:
             end = time.time()
             print('* total used time to load all attributes:',end - start,' seconds')
 
         print('Running experiments...')
         for experiment in range(number_of_experiments):
-            if verbose_ok:
+            if __VERBOSE:
                 print('* Running experiment {0}'.format(experiment))
             
-            possibles_bplanes = loadattribs.getBplanes(all_slice_amounts)
-            max_consecutive_slices = loadattribs.getSliceLimits(all_slice_amounts)
-            
-            number_of_groupings = __DEFAULT_NUMBER_OF_GROUPINGS
-            target_fitness = __DEFAULT_TARGET_FITNESS
+            #possibles_bplanes = loadattribs.getBplanes(all_slice_amounts)
+            #max_consecutive_slices = loadattribs.getSliceLimits(all_slice_amounts)
 
+            number_of_groupings = __DEFAULT_NUMBER_OF_GROUPINGS
+            #target_fitness = __DEFAULT_TARGET_FITNESS
+
+#def run_deap(all_attribs, 
+#             all_slice_amounts,
+#             all_output_classes,
+#             max_consecutive_slices=__DEFAULT_MAX_CONSEC_SLICES, # max length of the each slices range
+#             number_of_groupings=__DEFAULT_NUMBER_OF_GROUPINGS # controls how many slices ranges there will be used
+#             ):
             
             run_deap(all_attribs,
                      all_slice_amounts,
                      all_output_classes,
                      #possibles_bplanes, # usully means the list: (0,1,2)
                      max_consecutive_slices, # length of slices range
-                     number_of_groupings, # controls how many slices ranges there will be used
+                     number_of_groupings) # controls how many slices ranges there will be used
+                     #max_slice_values, # maximum valid slice index value for each body plane
                      #target_fitness, # sets the target fitness that will stop evolution if it was achieved
-                     multi_cpu_ok, # enables use of multicpu to individuals evaluation
-                     verbose_ok)
+                     #multi_cpu_ok, # enables use of multicpu to individuals evaluation
+                     #__VERBOSE)
                 
             print('* All experiments have finished\nGood bye!')
     else:

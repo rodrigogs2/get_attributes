@@ -17,6 +17,7 @@ import os, csv, sys, re
 import numpy as np
 import list_dir
 
+
 def build_txt_filename_from_3d_image(input_full_filename, output_directory=None):
     # splitting file and directory from input full filename
     input_file_dir,input_filename = os.path.split(input_full_filename)
@@ -71,9 +72,13 @@ def load_attribs_and_metadata(attributes_file):
         attribs_as_floats_lists.append(a)
     
     # Counting slices from each body axis
-    plane0 = len(body_plane_list) - body_plane_list[::-1].index('0')
-    plane1 = len(body_plane_list) - body_plane_list[::-1].index('1') - plane0
-    plane2 = len(body_plane_list) - body_plane_list[::-1].index('2') - plane0 - plane1
+    plane0 = body_plane_list.count('0') - 1 #256 slices are indexed between 0 and 255
+    plane1 = body_plane_list.count('1') - 1
+    plane2 = body_plane_list.count('2') - 1
+    
+    #plane0 = len(body_plane_list) - body_plane_list[::-1].index('0')
+    #plane1 = len(body_plane_list) - body_plane_list[::-1].index('1') - plane0
+    #plane2 = len(body_plane_list) - body_plane_list[::-1].index('2') - plane0 - plane1
     slice_amount_per_plane = [plane0,plane1,plane2]
     
     # NumPy transformations
@@ -158,23 +163,41 @@ def load_reshaped_attribs_and_metadata(attributes_file):
     reshaped = np.reshape(attribs,-1)
     return reshaped,slice_amount
 
-def get_attributes_from_a_slice(image_attribs, 
-                         slice_amounts,
+def get_attributes_from_a_slice(attribs_as_lines, 
+                         slice_limits,
                          specific_body_plane, 
                          specific_slice_num):
 
-    index = specific_slice_num
+    #specific_slice_num # value between 0 and 255 typically
+    
+    valid_bplanes = list(range(len(slice_limits)))
+    base = 0
+    slice_line = specific_slice_num
+    '''
+    first_lines_of_each_body_plane = []
+    for plane in valid_bplanes:
+        first_lines_of_each_body_plane = [0, slice_limits[0]+1, slice_limits[1]+1]
+'''
+    if specific_body_plane in valid_bplanes:
 
-    if specific_body_plane != 0:
-        plane1_start = slice_amounts[0]
+        if specific_body_plane != 0:
+            base = slice_limits[0] + 1 # 255 + 1
+            
+            if specific_body_plane != 1:
+                base = base + slice_limits[1] + 1
+            
         
-        if specific_body_plane == 1:
-            index = index + plane1_start
-        else:
-            plane2_start = plane1_start + slice_amounts[1]
-            index = index + plane2_start
+        try:
+            attrib = attribs_as_lines[slice_line + base]
+            return attrib
+        except IndexError:
+            print('IndexError at get_attributes_from_a_slice function. Used line={0}'.format(slice_line + base))
+            print('slice_limits={0} specific_body_plane={1} base={1}'.format(slice_limits,specific_body_plane,base))
+            
+    else:
+        raise ValueError('specific_body_plane value is invalid!')
 
-    return image_attribs[index]
+    return 0
     
     '''
     if specific_body_plane == 0 and :
@@ -189,7 +212,7 @@ def get_attributes_from_a_slice(image_attribs,
         start_index = initial_slice_num
         end_index = end_slice_num
     else:
-        raise(ValueError('*** ERROR: Invalid body plane ("{0}") in get_attributes_partition().\n'.format(specific_body_plane)))
+        raise(ValueError('*** ERROR: Invalid body plane ("{0}") in getAttribsPartitionFromSingleSlicesGrouping().\n'.format(specific_body_plane)))
         sys.exit(-1)
     '''
 
@@ -209,24 +232,33 @@ def get_attributes_from_a_range_of_slices(image_attribs,
 
 
 def getSliceLimits(all_slice_amounts):
-    min_values = [0,0,0]
+    size = len(all_slice_amounts[0]) # catching first slice amounts
+    max_values = [-1] * size
+    min_values = [256] * size
     
     for slice_amount in all_slice_amounts:
-        for i in range(3):
-            limit = slice_amount[i] - 1
-            if limit > min_values[i]: 
-                min_values[i] = limit
-    return min_values
+        for i in range(size):
+            #limit = slice_amount[i] - 1
+            value = slice_amount[i]
+            if value > max_values[i]: 
+                max_values[i] = value
+                #print('max slice value {0} was found!'.format(value))
+            if value < min_values[i]: 
+                min_values[i] = value
+                #print('min slice value {0} was found!'.format(value))
+    return min_values, max_values
 
 
 def getBplanes(all_slice_amounts):
-    return range(len(all_slice_amounts))
+    return list(range(len(all_slice_amounts[0])))
 
-def get_attributes_partition(all_attribs, 
-                         all_slice_amounts,
-                         specific_body_plane, 
-                         initial_slice_num, 
-                         total_slices=1):
+
+
+def getAttribsPartitionFromSingleSlicesGrouping(all_attribs,
+                                                all_slice_amounts,
+                                                specific_body_plane, 
+                                                initial_slice_num, 
+                                                total_slices):
     attribs_partition = []
     for attribs,s_amount in zip(all_attribs,all_slice_amounts):
         attribs_partition.append(get_attributes_from_a_range_of_slices(attribs,
@@ -244,6 +276,19 @@ def get_attributes_partition(all_attribs,
     
     return np.array(attribs_partition, dtype=np.float64)
 
+
+def getAttribsPartitionFromMultipleSlicesGroupings(all_attribs, 
+                         all_slice_amounts,
+                         slices_groupings):
+    
+    if len(slices_groupings) % 3 == 0:
+        
+        # Testing received arguments
+        print('* Testing received arguments...')
+        for i in range (len(slices_groupings),3):
+            bplane, first_slice, total_slices = slices_groupings[i],slices_groupings[i+1],slices_groupings[i+2]
+            print('{0}th grouping is:bplane={1},{2},{3}',i,bplane,first_slice,total_slices)
+    return []
 
 
 def display_help(script_name=None):
@@ -265,13 +310,16 @@ def main(argv):
     csv_file = '/home/rodrigo/Documents/_phd/csv_files/ADNI1_Complete_All_Yr_3T.csv' 
     # Getting all files
     
-    attribs, body_planes, slice_num, slice_amounts, output_classes = load_all_data(attributes_dir, csv_file)
+    print('* Loading all attributes data...')
+    all_attribs, body_planes, slice_num, slice_amounts, output_classes = load_all_data(attributes_dir, csv_file)
+    print('* ...done')
     
     bplane = 2
     start_slice = 123
     total_slices = 25
     
-    croped_attribs = get_attributes_from_a_range_of_slices(attribs[0], 
+    print('\n* Testing function to extract a range of slices from a attributes row...')
+    croped_attribs = get_attributes_from_a_range_of_slices(all_attribs[0], 
                                                            slice_amounts[0], 
                                                            bplane, 
                                                            start_slice, 
@@ -279,6 +327,19 @@ def main(argv):
     
     print('shape of croped_attribs: ',croped_attribs.shape)
     print('cropped attribs:\n',croped_attribs)
+    
+    import deap_alzheimer as da
+    possibles_bplanes = getBplanes(slice_amounts)
+    min_slice_limits, max_slice_limits = getSliceLimits(slice_amounts)
+    print('min_slice_limits',min_slice_limits)
+    print('max_slice_limits',max_slice_limits)
+    
+    sg1 = da.buildRandomSliceGrouping(possibles_bplanes,length=20,max_indexes=min_slice_limits,dbug=False)
+    sg2 = da.buildRandomSliceGrouping(possibles_bplanes,length=20,max_indexes=min_slice_limits,dbug=False)
+    all_slices_groupings = list(sg1+sg2)
+    
+    print('sg1 + sg2 concatenation= ',all_slices_groupings)
+
     
     '''
     attribs_files = list_dir.list_files(attributes_dir,".txt")
