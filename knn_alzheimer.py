@@ -86,32 +86,46 @@ def runKNN(data_partition, output_classes, k_value=5, knn_debug=False):
         print('* shape of an input instance retrived from the new partition=', new_partition[0].shape)
 
     ## KNN preparation
-    X_pandas = pd.DataFrame(data=new_partition)
-    #print('X_pandas=\n',X_pandas)
-    #_pandas = pd.DataFrame(data=np.ravel(output_classes,order='C'))
-    y_pandas = pd.DataFrame(data=output_classes)
-    #print('y_pandas=\n',y_pandas)
     
-    #print('Counting classes instances=',output_classes)
+    # Preparing data to use with PANDAS
+    X_pandas = pd.DataFrame(data=new_partition)
+    y_pandas = pd.DataFrame(data=output_classes)
+    
 
-    # STEP 1: split data between test and train sets
-    X_train, X_test, y_train, y_test = train_test_split(X_pandas, y_pandas, test_size=0.3, random_state=12)
+    # STEP 1: Preparing data: Rescalling data
+    from sklearn import preprocessing
+    scaler = preprocessing.StandardScaler()
+    X_pandas = scaler.fit_transform(X_pandas) # Fit your data on the scaler object
+            
+    # STEP 2: split data between test and train sets
+    X_train, X_test, y_train, y_test = train_test_split(X_pandas, np.ravel(y_pandas), test_size=0.3, random_state=12)
     
     # print the shapes of the new X objects
     if knn_debug: 
         print('X_train.shape:', X_train.shape)
         print('X_test.shape:', X_test.shape)
     
-    y_train = np.ravel(y_train)
-    y_test = np.ravel(y_test)
+    # STEP 2: Oversampling training data using SMOTE
+    if knn_debug: 
+        print('classes count(after SMOTE)=',(sum(y_train==0),sum(y_train==1),sum(y_train==2)))
+
+    
+    from imblearn.over_sampling import SMOTE
+    smt = SMOTE()
+    X_train, y_train = smt.fit_sample(X_train, y_train)
+
+    if knn_debug: 
+        print('classes count(after SMOTE)=',(sum(y_train==0),sum(y_train==1),sum(y_train==2)))
+
+    
+    #y_train = np.ravel(y_train)
+    #y_test = np.ravel(y_test)
     
     # print the shapes of the new y objects
     if knn_debug: 
         print('y_train.shape:',y_train.shape)
         print('y_test.shape:',y_test.shape)
     
-    # STEP 1: adjust shape of y vectors
-    np.ravel(y_train)
     
     # STEP 2: train the model on the training set
     knn = KNeighborsClassifier(n_neighbors=k_value)

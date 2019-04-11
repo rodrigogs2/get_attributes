@@ -159,7 +159,7 @@ def evaluateSlicesGroupingsKNN(individual, # list of integers
     # TEMPORARIO!!
     # ATENCAO!!
     accuracy = random.random()
-    accuracy, conf_matrix = knn_alzheimer.runKNN(all_groupings_partitions[0], output_classes)
+    accuracy, conf_matrix = knn_alzheimer.runKNN(all_groupings_partitions[0], output_classes, __VERBOSE)
     # ATENCAO!!
 
     #fitness_value = random.random()
@@ -187,27 +187,27 @@ def updateGeneBounds(bplanes,
                      number_of_slices_groupings,
                      dbug=__VERBOSE):
         
-        low_limits_per_slice_grouping = [0,0,1]
-        up_limits_per_slice_grouping = [len(bplanes),
-                                        min(slices_limits),
-                                        max_consec_slices]
+    low_limits_per_slice_grouping = [0,0,1]
+    up_limits_per_slice_grouping = [len(bplanes),
+                                    min(slices_limits),
+                                    max_consec_slices]
+    
+    all_up_limits = []
+    all_low_limits = []
+    for n in range(number_of_slices_groupings):
+        all_up_limits = all_up_limits + up_limits_per_slice_grouping
+        all_low_limits = all_low_limits + low_limits_per_slice_grouping
         
-        all_up_limits = []
-        all_low_limits = []
-        for n in range(number_of_slices_groupings):
-            all_up_limits = all_up_limits + up_limits_per_slice_grouping
-            all_low_limits = all_low_limits + low_limits_per_slice_grouping
-            
-        global __GENES_LOW_LIMITS
-        global __GENES_UP_LIMITS
-        
-        __GENES_LOW_LIMITS = all_low_limits
-        __GENES_UP_LIMITS = all_up_limits
-        
-        if dbug:
-            print('updating global MUTATE Low Limits...')
-            print('__GENES_LOW_LIMITS: ',__GENES_LOW_LIMITS)
-            print('__GENES_UP_LIMITS: ',__GENES_UP_LIMITS)
+    global __GENES_LOW_LIMITS
+    global __GENES_UP_LIMITS
+    
+    __GENES_LOW_LIMITS = all_low_limits
+    __GENES_UP_LIMITS = all_up_limits
+    
+    if dbug:
+        print('updating global MUTATE Low Limits...')
+        print('__GENES_LOW_LIMITS: ',__GENES_LOW_LIMITS)
+        print('__GENES_UP_LIMITS: ',__GENES_UP_LIMITS)
    
 
 
