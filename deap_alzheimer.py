@@ -39,18 +39,18 @@ __DEFAULT_NUMBER_OF_GROUPINGS = 1
 # Evolutionary arguments
 __GENES_LOW_LIMITS = [0,0,1]
 __GENES_UP_LIMITS = [2,160,20]
-__DEFAULT_KNN_K_VALUE = 7
+__DEFAULT_KNN_K_VALUE = 5
 __VERBOSE = False
 
 # Runtime Parameters
 __MULTI_CPU_USAGE = False
 
 # Default Evolutionary Parameters
-__TOURNEAMENT_SIZE = 4
+__TOURNEAMENT_SIZE = 10
 __MUTATE_INDP = 0.10
 __CROSSOVER_INDP = 0.4
 __NUMBER_OF_GENERATIONS = 5
-__POPULATION_SIZE = 20
+__POPULATION_SIZE = 100
 __DEFAULT_TARGET_FITNESS = 0.0
 __DEFAULT_WORST_FITNESS = -1.0
 
@@ -127,45 +127,38 @@ def evaluateSlicesGroupingsKNN(individual, # list of integers
                                k_value=5,
                                debug=__VERBOSE):
     
-    all_groupings_partitions = []
-    
+    all_groupings_partitions_list = [] 
     accuracy = 0.0
     conf_matrix = [[1,0,0],[0,1,0],[0,0,1]] # typical confusion matrix for the Alzheimer classification problem     
-    
     ind_size = len(individual)
     
     if ind_size % 3 == 0:    
-        # Getting and Merging data from all slices groupings
-        #if debug: print('evaluating individual=',individual)
+        # Getting data from a slices grouping
         for g in list(range(ind_size)):
             if g % 3 == 0:
                 plane = individual[g]
                 first_slice = individual[g+1]
                 total_slices = individual[g+2]
-                
-                # Debugging
-                #grouping_index = g // 3
-                #if debug: print('{0}th grouping: plane={1},first_slice={2},total_slices={3}'.format(grouping_index,plane,first_slice,total_slices))
-                
+                                
                 partition = loadattribs.getAttribsPartitionFromSingleSlicesGrouping(all_attribs,all_slice_amounts,plane,first_slice,total_slices)
-                all_groupings_partitions.append(partition)
+                
+                # append data to a list which will be merged later
+                all_groupings_partitions_list.append(partition)
                 
                 g = g + 3
     else:
         raise ValueError('Bad format individual: slices grouping length ({0}) must be a multiple of three.\nIndividual = {1}'.format(ind_size,individual))
         
+    # Merging all partitions data
+    all_partitions_merged = all_groupings_partitions_list[0]
+    for i in range(1,len(all_groupings_partitions_list)):
+        all_partitions_merged = all_partitions_merged + all_groupings_partitions_list[i]
     
-        
-    # TEMPORARIO!!
-    # ATENCAO!!
-    accuracy = random.random()
-    accuracy, conf_matrix = knn_alzheimer.runKNN(all_groupings_partitions[0], output_classes, __VERBOSE)
-    # ATENCAO!!
+    # Classifying merged data
+    accuracy, conf_matrix = knn_alzheimer.runKNN(all_partitions_merged, output_classes, knn_debug=debug)
 
-    #fitness_value = random.random()
-    fitness_value = accuracy
     
-    return fitness_value, conf_matrix
+    return accuracy, conf_matrix
 
 
 def print_population_fitness(some_population):
@@ -288,7 +281,7 @@ def run_deap(all_attribs,
                      all_slice_amounts = all_slice_amounts,
                      output_classes = all_output_classes,
                      k_value = __DEFAULT_KNN_K_VALUE,
-                     debug=__VERBOSE)
+                     debug=False)
 #    
             
     # defining population as a plane list
@@ -364,7 +357,7 @@ def run_deap(all_attribs,
 
                         if i % 3 == 0: # it's a body plane value!
                             # child[i] value is a body plane number (0,1 or 2)
-                            max_value = len(bplanes) - 1 # Last plane
+                            max_value = bplanes[len(bplanes)-1] # Last bplane value is the maximum
                             min_value = 0 # first plane
                             #print('i % 3 == 0, so it\'s a body plane value which is:')
                         

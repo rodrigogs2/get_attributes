@@ -61,8 +61,18 @@ print('-Total memory usage to load all the {0} data files is:\n\t\t{1} bytes'.fo
 #attribs,body_plane,slice_num = loadattribs.load_attribs_and_metadata(attribs_files[0])
 '''
 
-def runKNN(data_partition, output_classes, k_value=5, knn_debug=False):
-    if knn_debug: print('* a partition data shape=',data_partition.shape)
+def runKNN(
+        data_partition, 
+        output_classes, 
+        k_value=3, 
+        knn_debug=False, 
+        use_smote=True, 
+        use_rescaling=True
+        ):
+    if knn_debug: 
+        print('* Checking arguments formating...')
+        print('\t-data_partition.shape=',data_partition.shape)
+        print('\t-output_classes.shape=',output_classes.shape)
     
     # Data preparation
     try:
@@ -71,19 +81,21 @@ def runKNN(data_partition, output_classes, k_value=5, knn_debug=False):
     except IndexError:
         print('** IndexValue exception')
         print('\tdata_partition.shape=',data_partition.shape)
-        print('\output_classes.shape=',output_classes.shape)
+        print('\toutput_classes.shape=',output_classes.shape)
         print('\t')
         sys.exit(-1)
     
+    if knn_debug: 
+        print('* Reshaping for this data partition with these dimensions:',new_dimensions)
     
     new_partition = np.reshape(data_partition, new_dimensions)
-    
-    if knn_debug: 
-        print('* DIMENSION for the new partition array=',new_dimensions)
-        print('* the new partition data shape=',new_partition.shape)
-        print('* the output array shape=',output_classes.shape)
         
-        print('* shape of an input instance retrived from the new partition=', new_partition[0].shape)
+    if knn_debug: 
+        print('...done')
+    
+    
+    if knn_debug:
+        print('* The shape of a line data retrived from the new partition=', new_partition[0].shape)
 
     ## KNN preparation
     
@@ -91,40 +103,64 @@ def runKNN(data_partition, output_classes, k_value=5, knn_debug=False):
     X_pandas = pd.DataFrame(data=new_partition)
     y_pandas = pd.DataFrame(data=output_classes)
     
+    if knn_debug:
+        print('* Preparing data to use with Pandas...')
+        print('X_pandas=\n',X_pandas)
+        print('y_pandas=\n',y_pandas)
 
-    # STEP 1: Preparing data: Rescalling data
-    from sklearn import preprocessing
-    scaler = preprocessing.StandardScaler()
-    X_pandas = scaler.fit_transform(X_pandas) # Fit your data on the scaler object
-            
-    # STEP 2: split data between test and train sets
-    X_train, X_test, y_train, y_test = train_test_split(X_pandas, np.ravel(y_pandas), test_size=0.3, random_state=12)
-    
+    # Rescalling data
+    if use_rescaling:
+        if knn_debug: 
+            print('* Rescalling data... ',end='')
+        from sklearn import preprocessing
+        scaler = preprocessing.StandardScaler()
+        X_pandas = scaler.fit_transform(X_pandas) # Fit your data on the scaler object
+        if knn_debug: 
+            print('done')
+            print('Rescaled X_pandas=\n',X_pandas)
+        
+        
+    # STEP 1: split data between test and train sets
+    if knn_debug:
+        print('* Starting train and test sets splitting... ',end='')
+    X_train, X_test, y_train, y_test = train_test_split(
+            X_pandas, 
+            np.ravel(y_pandas), 
+            test_size=0.3, 
+            random_state=12)
+    if knn_debug:
+        print('done')
+
     # print the shapes of the new X objects
-    if knn_debug: 
-        print('X_train.shape:', X_train.shape)
-        print('X_test.shape:', X_test.shape)
-    
-    # STEP 2: Oversampling training data using SMOTE
-    if knn_debug: 
-        print('classes count(after SMOTE)=',(sum(y_train==0),sum(y_train==1),sum(y_train==2)))
+    if knn_debug:
+        print('* Display X and y objects\'s shape:')
+        print('\t X_train.shape: ', X_train.shape)
+        print('\t X_test.shape: ', X_test.shape)
+        print('\t y_train.shape: ', y_train.shape)
+        print('\t y_test.shape: ', y_test.shape)
 
     
-    from imblearn.over_sampling import SMOTE
-    smt = SMOTE()
-    X_train, y_train = smt.fit_sample(X_train, y_train)
+    if use_smote:
+        # Oversampling training data using SMOTE
+        if knn_debug: 
+            print('* Starting to oversample training data using SMOTE...')
+            print('\t -Instances amount from each class BEFORE to apply SMOTE=',(sum(y_train==0),sum(y_train==1),sum(y_train==2)))
 
-    if knn_debug: 
-        print('classes count(after SMOTE)=',(sum(y_train==0),sum(y_train==1),sum(y_train==2)))
+        from imblearn.over_sampling import SMOTE
+        smt = SMOTE()
+        X_train, y_train = smt.fit_sample(X_train, y_train)
+    
+        if knn_debug: 
+            print('\t -Instances amount from each class AFTER to apply SMOTE=',(sum(y_train==0),sum(y_train==1),sum(y_train==2)))
 
     
-    #y_train = np.ravel(y_train)
-    #y_test = np.ravel(y_test)
-    
-    # print the shapes of the new y objects
-    if knn_debug: 
-        print('y_train.shape:',y_train.shape)
-        print('y_test.shape:',y_test.shape)
+    # print the shapes of the new X and y objects
+    if knn_debug:
+        print('* Display X and y objects\'s shape after apply SMOTE to this sets:')
+        print('\t X_train.shape: ', X_train.shape)
+        print('\t X_test.shape (should be the same): ', X_test.shape)
+        print('\t y_train.shape: ', y_train.shape)
+        print('\t y_test.shape (should be the same): ', y_test.shape)
     
     
     # STEP 2: train the model on the training set
@@ -133,9 +169,9 @@ def runKNN(data_partition, output_classes, k_value=5, knn_debug=False):
     
     # STEP 3: make predictions on the testing set
     y_pred = knn.predict(X_test)
-    if knn_debug: 
-        print('y_pred=\n',y_pred)
-        print('y_pred.shape:',y_pred.shape)
+    #if knn_debug: 
+    #    print('y_pred=\n',y_pred)
+    #    print('y_pred.shape:',y_pred.shape)
     
     # compare actual response values (y_test) with predicted response values (y_pred)
     accuracy = metrics.accuracy_score(y_test, y_pred) 
@@ -151,21 +187,22 @@ def main(argv):
     # Use this arguments to set the input directory of attributes files
     attributes_dir = "../../attributes_amostra"
     csv_file = './ADNI1_Complete_All_Yr_3T.csv'
+
     
     # Getting all data
     
     start_time = time.time()
-    print('Loading all atributes data...')
+    print('Loading all atributes data... ', end='')
     attribs, body_planes, slice_num, slice_amounts, output_classes = loadattribs.load_all_data(attributes_dir, csv_file)
     end_time = time.time()
     total_time = end_time - start_time
-    print('...done (total time to load: {0})'.format(total_time))
+    print('done (total time to load: {0})'.format(total_time))
     
     import deap_alzheimer
-    max_slices_values = loadattribs.getSliceLimits(slice_amounts)
+    min_slices_values = loadattribs.getSliceLimits(slice_amounts)[0]
     valid_bplanes = loadattribs.getBplanes(slice_amounts)
 
-    print('Slice Limits:',max_slices_values)
+    print('Slice Limits:',min_slices_values)
     print('valid_bplanes=',valid_bplanes)
     
     
@@ -175,49 +212,50 @@ def main(argv):
 #                           max_indexes = __DEFAULT_MAX_SLICES_VALUES,    # Maximum value for the first slice index 
 #                           dbug=__DEFAULT_DEBUG):
     
-    print('Getting a random valid slice grouping...')
+    print('* Building a random valid slice grouping... ', end='')
     
-    bplane, start_slice, total_slices = deap_alzheimer.getRandomSliceGrouping(valid_bplanes,
-                                                                              max_length = 30,
-                                                                              max_indexes = max_slices_values,
-                                                                              dbug=False)
-    print('...done')
-    print('slice grouping found:\n\tbplane={0},first_slice={1},total_slices={2}'.format(bplane,start_slice,total_slices))
+    bplane, start_slice, total_slices = deap_alzheimer.buildRandomSliceGrouping(
+            planes = valid_bplanes,
+            length = 30,
+            max_indexes = min_slices_values,
+            dbug=False)
+    print('done. Slice grouping: [{0}, {1}, {2}]'.format(bplane,start_slice,total_slices))
     
-    '''
-    # testing getRandomSliceGrouping funcion (this can be removed later)
-    print('*** Testing getRandomSliceGrouping funcion a couple of times (this code block can be removed later):')
-    for i in range(5):
-        bplane, start_slice, total_slices = deap_alzheimer.getRandomSliceGrouping(valid_bplanes,
-                                                                                  max_length = 30,
-                                                                                  max_indexes = max_slices_values,
-                                                                                  dbug=True)
-    '''
-    
+   
     start_time = time.time()
      
     # Getting some data partition 
-    print('Getting some data partition using this last slice grouping ({0})...'.format((bplane,start_slice,total_slices)))
-    data_partition = loadattribs.getAttribsPartitionFromSingleSlicesGrouping(attribs,
-                                                          slice_amounts,
-                                                          bplane,
-                                                          start_slice,
-                                                          total_slices)
+    print('* Getting a random data partition using this slice grouping {0}... '.format([bplane,start_slice,total_slices]),end='')
+    data_partition = loadattribs.getAttribsPartitionFromSingleSlicesGrouping(
+            attribs,
+            slice_amounts,
+            bplane,
+            start_slice,
+            total_slices)
     end_time = time.time()
     total_time = end_time - start_time
-    print('...done \nTotal time to get the data partition (bplane={1},first_slice={2},total_slices={3}): {0}'.format(total_time,bplane,start_slice,total_slices))
+    print('done.\n\tTotal time to get the data partition= {0}'.format(total_time,))
+    print('* Data Partition\'s shape= ',data_partition.shape)
+    
     
 
     start_time = time.time()
-    print('Starting to run knn classifier to evaluate this partition of data...')
-    accuracy, conf_matrix = runKNN(data_partition, output_classes, K_VALUE)
+    print('* Starting to run knn classifier to evaluate this data partition...')
+    accuracy, conf_matrix = runKNN(
+            data_partition, 
+            output_classes, 
+            K_VALUE,
+            knn_debug=True,
+            use_smote=True,
+            use_rescaling=True)
     
     end_time = time.time()
     total_time = end_time - start_time
-    print('...done (total time to run classifier: {0})'.format(total_time))
+    print('done. Total time to run classifier= {0}'.format(total_time))
     
-    print('\nConfusion matrix was:\n', conf_matrix)
-    print ('KNN Acurracy with K={0} was: {1}'.format(K_VALUE, accuracy))
+    print('\n* Confusion matrix was:\n', conf_matrix)
+    print ('* KNN Acurracy with K={0} was: {1}'.format(K_VALUE, accuracy))
+    
     return 0
     
     

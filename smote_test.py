@@ -21,12 +21,17 @@ import knn_alzheimer
 
 
 def main(argv):
+    __USE_DATA_SAMPLE = True
+    
     
     # KNN Parameters
     K_VALUE = 5
     
     # Use this arguments to set the input directory of attributes files
     attributes_dir = "../../attributes_amostra"
+    
+    if not __USE_DATA_SAMPLE:
+        attributes_dir = "../../attributes2"
     csv_file = './ADNI1_Complete_All_Yr_3T.csv'
     
     # Getting all data
@@ -53,11 +58,11 @@ def main(argv):
 #                           dbug=__DEFAULT_DEBUG):
     
     print('Getting a random valid slice grouping...')
-    
-    bplane, start_slice, total_slices = deap_alzheimer.buildRandomSliceGrouping(valid_bplanes,
-                                                                              length = 30,
-                                                                              max_indexes = min_slices_values,
-                                                                              dbug=False)
+    bplane, start_slice, total_slices = deap_alzheimer.buildRandomSliceGrouping(
+            planes=valid_bplanes,
+            length = 30,
+            max_indexes = min_slices_values,
+            dbug=False)
     print('...done')
     
     print('slice grouping found:\n\tbplane={0},first_slice={1},total_slices={2}'.format(bplane,start_slice,total_slices))
@@ -82,7 +87,7 @@ def main(argv):
 
     start_time = time.time()
     print('Starting to run knn classifier to evaluate this partition of data...')
-    accuracy, conf_matrix = knn_alzheimer.runKNN(data_partition, output_classes, K_VALUE)
+    accuracy, conf_matrix = knn_alzheimer.runKNN(data_partition, output_classes, K_VALUE,use_smote=False,use_rescaling=False)
     
     end_time = time.time()
     total_time = end_time - start_time
@@ -95,7 +100,7 @@ def main(argv):
     
     ###########################################################################
     
-    K_VALUE = 7
+    K_VALUE = 5
     # SMOTE BEGINS HERE
     smote_debug = True
     print('* a partition data shape=',data_partition.shape)
