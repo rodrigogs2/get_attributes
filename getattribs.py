@@ -472,6 +472,7 @@ def display_help(script_name=None):
     print('\t-m, --multicpu\tset on computation over all cores (default: multicore is off)')
     print('\t-v, --verbose\tenables verbose mode (default: disabled)')
     print('\t-r, --resume\tresume extraction: output files are not overwritten (default: resume is off)')
+    print('\t-k, --keep_png\ttemporary png files extracted from MRI volume slices are not deleted (default: keep_png is False)')
 
 def main(argv):
     
@@ -482,9 +483,10 @@ def main(argv):
     verbose_ok = False
     multi_cpu_ok = False
     reset_txt_file_ok = True
+    keep_temporary_png = False
     
     try:
-        opts, args = getopt.getopt(argv[1:],"hi:o:vmr",["ifile=","odir=","verbose","multicpu","reset_output_file"]) 
+        opts, args = getopt.getopt(argv[1:],"hi:o:vmrk",["ifile=","odir=","verbose","multicpu","reset_output_file","keep_png"]) 
     except getopt.GetoptError:
         display_help()
         sys.exit(1)
@@ -504,17 +506,21 @@ def main(argv):
             multi_cpu_ok = True
         elif opt in ("-r", "--resume"):
             reset_txt_file_ok = False
+        elif opt in ("-k","--keep_png"):
+            keep_temporary_png = True
     
     if ifile_ok and ofile_ok:
         print ('Output directory is: ', outputdir)
         print ('Input file is: ', inputfile)
         
-        loadattribs.load_all_data(attribs_dir, csv_file)
-        #extract_attributes(input_path=inputfile,
+        #loadattribs.load_all_data(attribs_dir, csv_file)
+        extract_attributes(input_path=inputfile,
+                           keep_png_cache_files=keep_temporary_png,
                            output_directory=outputdir,
                            verbose=verbose_ok,
                            multi_cpu=multi_cpu_ok,
-                           reset_output_file=reset_txt_file_ok)
+                           reset_output_file=reset_txt_file_ok,
+                           )
         
     else:
         display_help()
