@@ -1,3 +1,5 @@
+
+
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
@@ -14,6 +16,8 @@ import loadattribs
 import knn_alzheimer
 import getopt
 import time
+import datetime
+
 
 # Globla Slicing Arguments
 #global __ALL_ATTRIBS, __ALL_OUTPUT_VALUES, __BODY_PLANES, __MAX_SLICES_VALUES, __DEFAULT_MAX_CONSEC_SLICES, __DEFAULT_NUMBER_OF_GROUPINGS
@@ -50,11 +54,35 @@ __TOURNEAMENT_SIZE = 10
 __MUTATE_INDP = 0.10
 __CROSSOVER_INDP = 0.4
 __NUMBER_OF_GENERATIONS = 5
-__POPULATION_SIZE = 100
+__POPULATION_SIZE = 120
 __DEFAULT_TARGET_FITNESS = 0.0
 __DEFAULT_WORST_FITNESS = -1.0
+__BEST_INDIVIDUALS_SIZE = 5
+
+# Results Variables
+queueSize = 10
+#bestFitnesses = asyncio.Queue(maxsize=queueSize)
+#bestIndividuals = asyncio.Queue(maxsize=queueSize)
+#generationsWihImprovements = asyncio.Queue(maxsize=queueSize)
+#bestConfMatrices = asyncio.Queue(maxsize=queueSize)
+#bestFitnesses = []
+bestIndividuals = []
+generationsWihImprovements = []
+#bestConfMatrices = []
+__OUTPUT_DIRECTORY = './'
+
+# Alarm Variables
+__ALARM = True
+__DURATION = 1 #seconds
+__FREQ = 440 # Hz
 
 
+def getBestFit():
+    global best_ind
+    if best_ind != None:
+        return best_ind.fitness.values[0]
+    else:
+        return __DEFAULT_WORST_FITNESS
 
 def getRandomPlane(planes = __BODY_PLANES):
     plane = random.sample(planes,1)[0]
@@ -67,18 +95,6 @@ def getRandomTotalSlices(length = __DEFAULT_MAX_CONSEC_SLICES):
     total_slices = random.sample(possibles_total_slices, 1)[0]
     return total_slices
 
-
-
-#def getRandomFirstSlice(plane,
-#                        total_slices,
-#                        sampled_max_index = __MAX_SLICES_VALUES, # Maximum value for the first slice index 
-#                        dbug= __VERBOSE):
-#    
-#    range_first_slice = list(range(abs(max_index - total_slices)))
-#    
-#    first_slice_index = random.sample(range_first_slice,1)[0]
-#    
-#    return 1
 
 # Creates a tuple whichs represents a slice grouping composed by @length
 # consecutives slices
@@ -147,7 +163,7 @@ def evaluateSlicesGroupingsKNN(individual, # list of integers
                 
                 g = g + 3
     else:
-        raise ValueError('Bad format individual: slices grouping length ({0}) must be a multiple of three.\nIndividual = {1}'.format(ind_size,individual))
+        raise ValueError('Bad formatted individual: slices grouping length ({0}) must be a multiple of three.\nIndividual = {1}'.format(ind_size,individual))
         
     # Merging all partitions data
     all_partitions_merged = all_groupings_partitions_list[0]
@@ -201,14 +217,125 @@ def updateGeneBounds(bplanes,
         print('updating global MUTATE Low Limits...')
         print('__GENES_LOW_LIMITS: ',__GENES_LOW_LIMITS)
         print('__GENES_UP_LIMITS: ',__GENES_UP_LIMITS)
-   
+
+
+def build_experiment_output_filename(exp_num, best_accuracy):
+    acc = 'acc_{0:.2f}_'.format(best_accuracy)
+    global __OUTPUT_DIRECTORY
+    dirname = __OUTPUT_DIRECTORY
+    filename = '{3}_experiment_{0:03d}_{1}_{2}.txt'.format(exp_num,datetime.date.today(),int(round(time.time())),acc)
+    output_full_filename = os.path.join(dirname, filename)
+    return output_full_filename
+
+def append_experiment_data_to_output_file(
+        exp_num, 
+        gen_num, 
+        exp_output_full_filename,
+        dbug =__VERBOSE):
+    
+    #global best_fit
+    global best_ind 
+    best_fit = getBestFit()
+        
+    append_mode = "a"
+    blank_file = False
+    
+    # checking output file
+    if not os.path.exists(exp_output_full_filename):
+        blank_file = True
+        output_file_dir,output_filename = os.path.split(exp_output_full_filename)
+        
+        # creates output dir when path doesnt exist
+        if output_file_dir != '' and not os.path.exists(output_file_dir):
+            try:
+                os.makedirs(output_file_dir)
+            except os.error:
+                print ('*** ERROR: Output directory (%s) can not be created\n' % output_file_dir)
+                sys.exit(1)
+        
+    # Writting to output file
+    try :
+        output_file = open(exp_output_full_filename, append_mode)
+        if blank_file:
+            head = 'gen,best_fit,individual\n'
+            output_file.write(head)
+        
+        line = '{0:3d},{1:.8f},{2}\n'.format(gen_num, best_fit, best_ind)
+        output_file.write(line)
+        output_file.close()
+    except os.error:
+        output_file.close()
+        print(" *** ERROR: file %s can not be written" % exp_output_full_filename)
+        exit(1)
+    
+    return exp_output_full_filename
+
+
+def saveExperimentDataToFile(exp_num):
+    best_accuracy = getBestFit()
+    ofile = build_experiment_output_filename(exp_num,best_accuracy)
+    print('Saving output file {0}'.format(ofile))
+    
+    #global bestFitnesses, bestIndividuals, generationsWihImprovements, bestConfMatrices
+    global bestIndividuals, generationsWihImprovements
+    
+    if len(bestIndividuals) == len(generationsWihImprovements):
+    #if len(bestFitnesses) == len(bestIndividuals) and len(bestIndividuals) == len(generationsWihImprovements) and len(generationsWihImprovements) == len(bestConfMatrices):
+#        for fit,gnum,ind,cmat in zip(bestFitnesses,
+#                                     generationsWihImprovements,
+#                                     bestIndividuals,
+#                                     bestConfMatrices):
+#            append_experiment_data_to_output_file(exp_num,gnum,str(cmat),ofile)
+        for ind, gnum in zip(bestIndividuals, generationsWihImprovements):
+            #cmat = ind.confusion_matrix
+            append_experiment_data_to_output_file(exp_num,gnum,ofile)
+        
+    else:
+        print('Problem with results format:\n')
+        print('len(bestFitnesses)={0}, len(bestIndividuals)={1}, len(generationsWihImprovements)={2}, len(bestConfMatrices)={3}'.format(len(bestFitnesses), len(bestIndividuals), len(generationsWihImprovements), len(bestConfMatrices)))
+        sys.exit(1)
+
+
+def printExperimentsResults():
+    global queueSize
+    global bestIndividuals
+    for i in range(queueSize):
+        print('Best Individual (id={0}): {1}, with Fitness: {2}'.format(bestIndividuals[i]).format)
+        print('', end='', flush=True)
+#def saveExperimentData(currentGeneration, 
+#                       experiment_number, 
+#                       experiment_output_full_filename):
+#    global best_fit
+#    global best_ind
+#    line = str(experiment_number) + ',' + str(currentGeneration) + ',' + str(best_fit) + ',' + str(best_ind)  
+#    print('New Best Individual: ' + line)
+#    # append_data_to_experiment_output_file(line, experiment_output_file)
+    
+
+def updateBestIndividual(newBestIndividual, currentGeneration):
+    
+    if getBestFit() < newBestIndividual.fitness.values[0]:
+        global best_ind
+        best_ind = newBestIndividual # updating best individual
+        #best_fit = newBestIndividual.fitness.values[0] # updating best fitness
+        #global best_cmatrix 
+        #best_cmatrix = newBestIndividual.confusion_matrix# updating best fitness
+        global bestIndividuals
+        bestIndividuals.append(newBestIndividual)
+        global generationsWihImprovements
+        generationsWihImprovements.append(currentGeneration)
+        #global bestFitnesses
+        #bestFitnesses.append(best_fit)
+        #global bestConfMatrices
+        #bestConfMatrices.append(best_cmatrix)
 
 
 def run_deap(all_attribs, 
              all_slice_amounts,
              all_output_classes,
              max_consecutive_slices=__DEFAULT_MAX_CONSEC_SLICES, # max length of the each slices range
-             number_of_groupings=__DEFAULT_NUMBER_OF_GROUPINGS # controls how many slices ranges there will be used
+             number_of_groupings=__DEFAULT_NUMBER_OF_GROUPINGS, # controls how many slices ranges there will be used
+             current_experiment=0
              ):
     
 
@@ -218,6 +345,7 @@ def run_deap(all_attribs,
     global __MAX_SLICES_VALUES
     global __MIN_SLICES_VALUES
     global __VERBOSE
+    global __OUTPUT_DIRECTORY
     global __DEFAULT_MAX_CONSEC_SLICES
     
     # Updating global variables
@@ -250,9 +378,12 @@ def run_deap(all_attribs,
     print('\t* __GENES_UP_LIMITS = ',__GENES_UP_LIMITS)
     print('\t* __DEFAULT_KNN_K_VALUE = ',__DEFAULT_KNN_K_VALUE)
     print('\t* __VERBOSE = ',__VERBOSE)
+    print('\t* __OUTPUT_DIRECTORY = ',__OUTPUT_DIRECTORY)
 
-    creator.create("FitnessMax", base.Fitness, weights=(1.0,))
-    creator.create("Individual", list, fitness=creator.FitnessMax, confusion_matrix=None)
+    if 'FitnessMax' not in globals():
+        creator.create("FitnessMax", base.Fitness, weights=(1.0,))
+    if 'Individual' not in globals():
+        creator.create("Individual", list, fitness=creator.FitnessMax, confusion_matrix=None)
 
     # inicializando toolbox
     toolbox = base.Toolbox()
@@ -293,10 +424,20 @@ def run_deap(all_attribs,
     # creating initial individuals
     pop = toolbox.population(n=__POPULATION_SIZE)
     
-    # TEMPORARY
+    # best indivudal tracking
     global best_ind
-    global best_fit
-    best_fit = -1.0
+    #global best_fit
+    #global best_conf_matrix
+    #best_fit = -1.0
+    best_ind = pop[0]
+    
+    # Queue (FIFO) where best individuals are saved in
+    global bestFitnesses
+    global bestIndividuals
+    global bestConfMatrices
+    global generationsWihImprovements
+    
+    
     
     # Evaluate initial population
     fits_and_matrices = list(map(toolbox.evaluate, pop))
@@ -304,42 +445,20 @@ def run_deap(all_attribs,
         ind.fitness.values = (fit_and_matrix_tuple[0],)
         ind.confusion_matrix = fit_and_matrix_tuple[1]
         
-        # Temporary
-        if ind.fitness.values[0] > best_fit:
+        # Tracking new best individuals
+        if ind.fitness.values[0] > best_ind.fitness.values[0]: # It's a maximization problem
             best_ind = ind
+            
+
+    updateBestIndividual(best_ind,0) # New individual has found on the initial population
         
-    
-    # evaluating initial individuals
-    
-#    import queue
-#    queue_size = 5
-#    best_inds = queue.Queue(maxsize=queue_size ) # where best individuals are saved in
-#    
-#    for ind in pop:
-#        best_fit = -1 # maximization problem
-#        fitness, conf_matrix = toolbox.evaluate(ind,
-#                                                all_attribs=all_attribs,
-#                                                all_slice_amounts=all_slice_amounts,
-#                                                output_classes=all_output_classes,
-#                                                debug=__VERBOSE)
-#        ind.fitness.values = (fitness,)
-#        ind.confusion_matrix = conf_matrix
-#        
-#        if fitness > best_fit:
-#            best_fit = fitness
-#
-#            if best_inds.full:
-#                ind_out = best_inds.get() # pop from left
-#                
-#            best_inds.put(ind)
-#            
-#            print('New best individual was found!\n best_inds now is:\n',best_inds)
+    print('Initial best individual: {0} (fitness={1})'.format(best_ind,best_ind.fitness.values[0]))
     
     toolbox.register("mate", tools.cxUniform, indpb=__CROSSOVER_INDP) # crossing
     toolbox.register("mutate", tools.mutUniformInt, low=__GENES_LOW_LIMITS, up=__GENES_UP_LIMITS, indpb=__MUTATE_INDP) # mutation
     toolbox.register("select", tools.selTournament, tournsize=__TOURNEAMENT_SIZE) # selection        
         
-    
+    # Fuction which checks and resolves individual integrity issues
     def checkBounds(bplanes,
                           slice_limits = __MIN_SLICES_VALUES,
                           max_consec_slices = __DEFAULT_MAX_CONSEC_SLICES,
@@ -349,7 +468,6 @@ def run_deap(all_attribs,
             def wrapper(*args, **kargs):
                 offspring = func(*args, **kargs)
                 
-                # COMENTAR ESTE FOR
                 for child in offspring:
                     for i in range(len(child)):
                         max_value = __GENES_UP_LIMITS[i]
@@ -359,57 +477,38 @@ def run_deap(all_attribs,
                             # child[i] value is a body plane number (0,1 or 2)
                             max_value = bplanes[len(bplanes)-1] # Last bplane value is the maximum
                             min_value = 0 # first plane
-                            #print('i % 3 == 0, so it\'s a body plane value which is:')
                         
                         elif i % 3 == 1: # it's a first slice value!
                             # child[i] value is the first slice index (depends on bplane)
                             bplane = child[i-1] # getting actual bplane
                             max_value = slice_limits[bplane] - max_consec_slices
                             min_value = 0
-                            #print('i % 3 == 1, so it\'s the first slice index value which is:')
                         
                         elif i % 3 == 2: # it's a total_slices value!
                             # child[i] value is the total of consecutive slices
                             max_value = max_consec_slices
                             min_value = 1
-                            #print('i % 3 == 1, so it\'s the consecutive slices amount value which is:')
-                        
                         child[i] = (child[i] % (max_value - min_value)) + min_value
-                        
-                        #print('child[{0}] is {1}'.format(i,child[i]))
-                        
-                        # Ex.: Se apos mutacao o valor child[i]==24, max==20 e min==1 
-                        # valor corrigido = (24 % (20 - 1)) + 1
-                        #                   = (5) + 1 = 6
-                        
                         
                 return offspring
             return wrapper
         return decorator
     
-    
-    # Building lower and upper bounds to each gene of a individual
-    
-    # Updating global limits for genes
-    #updateGeneBounds(__BODY_PLANES,__MAX_SLICES_VALUES,max_consecutive_slices,number_of_groupings,__VERBOSE)
-    
-    
-    
-    #toolbox.decorate('mate',checkMateBounds(slice_limits, max_consecutive_slices ))#max_slice_values, max_consecutive_slices))
+    # Registering individual integrity checking after mutation operation
     toolbox.decorate('mutate',checkBounds(__BODY_PLANES,
                                           __MIN_SLICES_VALUES, 
                                           max_consecutive_slices, 
                                           number_of_groupings, 
                                           __VERBOSE))
-
+    # Registering individual integrity checking after crossover operation
     toolbox.decorate('mate',checkBounds(__BODY_PLANES,
-                                          __MIN_SLICES_VALUES, 
+                                        __MIN_SLICES_VALUES, 
                                           max_consecutive_slices, 
-                                          number_of_groupings, 
-                                          __VERBOSE))
+                                        number_of_groupings, 
+                                        __VERBOSE))
+   
     
-    
-    ## criando e imprimindo populacao
+    # Initial Population Resume (remove later)
     if __VERBOSE:
         print('* Initial population with {0} individuals:'.format(len(pop)))
         for ind in pop: print ('Individual={0}\t Fitness={1}'.format(ind,ind.fitness.values[0]))
@@ -422,12 +521,12 @@ def run_deap(all_attribs,
     
     print('\n* Initializing evolution along to {0} generations'.format(number_of_generations))
     
-    for gen in range(number_of_generations):
-        print('\n* Initializing {0}th generation...'.format(gen))
+    for gen in list(range(1,number_of_generations + 1)):
+        print('\n* Initializing {0}th generation (current best fitness={1})...'.format(gen,best_ind.fitness.values[0]))
         
         print('\t* Running variation operators...')
         offspring = algorithms.varAnd(pop, 
-                                      toolbox, 
+                                          toolbox, 
                                       __CROSSOVER_INDP, 
                                       __MUTATE_INDP)
         print('\t Done!')
@@ -435,13 +534,7 @@ def run_deap(all_attribs,
         print('\n\t* Evaluating offspring...')
         fits_and_matrices = list(map(toolbox.evaluate,offspring)) # list of (fitness,conf_matrix) tuples
         print('\t Done!')
-        
-        
-    
-        #for child in offspring:
-        #child.fitness.values = fits_and_matrices[0][0]
-            #child.confusion_matrix = fits_and_matrices[]
-        
+       
         
         print('\n\t* Updating fitness and confusion matrix of offspring...')
         for i in range(len(offspring)):
@@ -453,37 +546,25 @@ def run_deap(all_attribs,
             offspring[i].confusion_matrix =  conf_matrix # second tuple element
             
             
-            # Temporary
-            if fit > best_fit:
+            # tracking new best individual
+            if fit > best_ind.fitness.values[0]:
                 print('\t New BEST Individual {0} with Fitness={1} was found!'.format(offspring[i],fit))
-                best_fit = fit
-                best_ind = offspring[i]
+                updateBestIndividual(offspring[i],gen)
+                
             
-        print('\t Done!')
+        
+        
     
     print('Evolution process has finished')
     
+    #exp_output_filename = build_experiment_output_filename(current_experiment,best_fit)
+    
+    #saving data to output file"
+    saveExperimentDataToFile(current_experiment)
+    
     print('Best Individual Found is: ', best_ind)
-    print('\t* Fitness: ', best_fit)
+    print('\t* Fitness: ', getBestFit())
     print('\t* Confusion Matrix:\n', best_ind.confusion_matrix)
-    
-    # testando criação de instância do tipo Individual
-    #ind_teste = toolbox.individual()
-    #print("Teste para criação de Individuo: ", ind_teste)
-    
-    #evaluate(ind_teste,debug=True)
-    
-    ## avaliando e imprimindo populacao
-    
-#    if verbose:
-#        print('* Initializing population evaluation...')
-#    evaluate_population(pop)
-#    if verbose:
-#        print('Done!')
-#
-#    if verbose:
-#        print_population_fitness(pop)
-    
     
 
 # REVISAR!!
@@ -497,7 +578,7 @@ def display_help(script_name=None):
     #print('\t-d, --dir\tdirectory which contains all attributes files extracted by get_attribs.py tool')
     print('\t-m, --multicpu\tset on computation over all cores (default: multicore is off)')
     print('\t-v, --verbose\tenables verbose mode (default: disabled)')
-    print('\t-n, --resume\tnumber_of_experiments: number of experiments to run with deap (default: 1)')
+    print('\t-n, --number_of_experiments\tnumber of experiments to run with deap (default: 1)')
     print('\t-h, --help\tdisplays this help screen')
 
 
@@ -568,8 +649,11 @@ def main(argv):
             end = time.time()
             print('* total used time to load all attributes:',end - start,' seconds')
 
+        
+        global __ALARM, __FREQ, __DURATION
+        
         print('Running experiments...')
-        for experiment in range(number_of_experiments):
+        for experiment in list(range(1,number_of_experiments + 1)):
             if __VERBOSE:
                 print('* Running experiment {0}'.format(experiment))
             
@@ -591,13 +675,20 @@ def main(argv):
                      all_output_classes,
                      #possibles_bplanes, # usully means the list: (0,1,2)
                      max_consecutive_slices, # length of slices range
-                     number_of_groupings) # controls how many slices ranges there will be used
+                     number_of_groupings,
+                     experiment) # controls how many slices ranges there will be used
                      #max_slice_values, # maximum valid slice index value for each body plane
                      #target_fitness, # sets the target fitness that will stop evolution if it was achieved
                      #multi_cpu_ok, # enables use of multicpu to individuals evaluation
                      #__VERBOSE)
                 
-            print('* All experiments have finished\nGood bye!')
+            if __ALARM:
+                os.system('play -nq -t alsa synth {} sine {}'.format(__DURATION, __FREQ))
+        print('* All experiments have finished\nGood bye!')
+        
+        
+        if __ALARM:
+            os.system('play -nq -t alsa synth {} sine {}'.format(__DURATION, __FREQ))
     else:
         display_help()
     
