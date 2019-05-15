@@ -452,6 +452,7 @@ def run_deap(all_attribs,
         if ind.fitness.values[0] > getBestFit(): # It's a maximization problem
             best_ind = ind
             
+            
     current_generation = 0
     updateBestIndividual(best_ind, current_generation) # New individual has found on the initial population
         
