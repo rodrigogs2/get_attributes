@@ -17,6 +17,8 @@ import knn_alzheimer
 import getopt
 import time
 import datetime
+import multiprocessing
+from multiprocessing import Pool
 
 
 # Globla Slicing Arguments
@@ -292,7 +294,7 @@ def saveExperimentDataToFile(exp_num):
         
     else:
         print('Problem with results format:\n')
-        print('len(bestFitnesses)={0}, len(bestIndividuals)={1}, len(generationsWihImprovements)={2}, len(bestConfMatrices)={3}'.format(len(bestFitnesses), len(bestIndividuals), len(generationsWihImprovements), len(bestConfMatrices)))
+        print('len(bestIndividuals)={0}, len(generationsWihImprovements)={1}'.format(len(bestIndividuals), len(generationsWihImprovements)))
         sys.exit(1)
 
 
@@ -312,7 +314,7 @@ def printExperimentsResults():
 #    # append_data_to_experiment_output_file(line, experiment_output_file)
     
 
-def updateBestIndividual(newBestIndividual, currentGeneration):
+def updateBestIndividual(newBestIndividual, improvementGeneration):
     
     if getBestFit() < newBestIndividual.fitness.values[0]:
         global best_ind
@@ -323,7 +325,7 @@ def updateBestIndividual(newBestIndividual, currentGeneration):
         global bestIndividuals
         bestIndividuals.append(newBestIndividual)
         global generationsWihImprovements
-        generationsWihImprovements.append(currentGeneration)
+        generationsWihImprovements.append(improvementGeneration)
         #global bestFitnesses
         #bestFitnesses.append(best_fit)
         #global bestConfMatrices
@@ -335,11 +337,9 @@ def run_deap(all_attribs,
              all_output_classes,
              max_consecutive_slices=__DEFAULT_MAX_CONSEC_SLICES, # max length of the each slices range
              number_of_groupings=__DEFAULT_NUMBER_OF_GROUPINGS, # controls how many slices ranges there will be used
-             current_experiment=0
+             current_experiment=1
              ):
-    
-
-    
+ 
     # Global Variables
     global __BODY_PLANES
     global __MAX_SLICES_VALUES
@@ -347,6 +347,9 @@ def run_deap(all_attribs,
     global __VERBOSE
     global __OUTPUT_DIRECTORY
     global __DEFAULT_MAX_CONSEC_SLICES
+    
+    if __VERBOSE:
+        print('* Running experiment {0}'.format(current_experiment))
     
     # Updating global variables
     __BODY_PLANES = loadattribs.getBplanes(all_slice_amounts)
@@ -432,9 +435,9 @@ def run_deap(all_attribs,
     best_ind = pop[0]
     
     # Queue (FIFO) where best individuals are saved in
-    global bestFitnesses
+    #global bestFitnesses
     global bestIndividuals
-    global bestConfMatrices
+    #global bestConfMatrices
     global generationsWihImprovements
     
     
@@ -446,11 +449,11 @@ def run_deap(all_attribs,
         ind.confusion_matrix = fit_and_matrix_tuple[1]
         
         # Tracking new best individuals
-        if ind.fitness.values[0] > best_ind.fitness.values[0]: # It's a maximization problem
+        if ind.fitness.values[0] > getBestFit(): # It's a maximization problem
             best_ind = ind
             
-
-    updateBestIndividual(best_ind,0) # New individual has found on the initial population
+    current_generation = 0
+    updateBestIndividual(best_ind, current_generation) # New individual has found on the initial population
         
     print('Initial best individual: {0} (fitness={1})'.format(best_ind,best_ind.fitness.values[0]))
     
@@ -522,7 +525,7 @@ def run_deap(all_attribs,
     print('\n* Initializing evolution along to {0} generations'.format(number_of_generations))
     
     for gen in list(range(1,number_of_generations + 1)):
-        print('\n* Initializing {0}th generation (current best fitness={1})...'.format(gen,best_ind.fitness.values[0]))
+        print('\n* Initializing {0}th generation of experiment={2}(current best fitness={1})...'.format(gen,best_ind.fitness.values[0],current_experiment))
         
         print('\t* Running variation operators...')
         offspring = algorithms.varAnd(pop, 
@@ -553,9 +556,15 @@ def run_deap(all_attribs,
                 
             
         
-        
+    if __VERBOSE:
+        print('\t* Best Individuals Found:')
+        for ind, gen in zip(bestIndividuals, generationsWihImprovements):
+            print('\tbest_fit={0:.6f}\t best_ind={1}\t at generation={2}'.format(ind.fitness.values[0],ind,gen))
+            
     
-    print('Evolution process has finished')
+        print('\n\t*Evolution process has finished')
+        
+        print('\n\t*Saving experiment data to output file...')
     
     #exp_output_filename = build_experiment_output_filename(current_experiment,best_fit)
     
@@ -594,7 +603,7 @@ def main(argv):
     number_of_experiments = 1
     
     try:
-        opts, args = getopt.getopt(argv[1:],"hc:d:vn:",["csv=","dir=","verbose","multicpu","number_of_experiments="]) 
+        opts, args = getopt.getopt(argv[1:],"hc:d:vmn:",["csv=","dir=","verbose","multicpu","number_of_experiments="]) 
     except getopt.GetoptError:
         display_help()
         sys.exit(1)
@@ -651,41 +660,36 @@ def main(argv):
 
         
         global __ALARM, __FREQ, __DURATION
+        number_of_groupings = __DEFAULT_NUMBER_OF_GROUPINGS
         
         print('Running experiments...')
-        for experiment in list(range(1,number_of_experiments + 1)):
-            if __VERBOSE:
-                print('* Running experiment {0}'.format(experiment))
-            
-            #possibles_bplanes = loadattribs.getBplanes(all_slice_amounts)
-            #max_consecutive_slices = loadattribs.getSliceLimits(all_slice_amounts)
-
-            number_of_groupings = __DEFAULT_NUMBER_OF_GROUPINGS
-            #target_fitness = __DEFAULT_TARGET_FITNESS
-
-#def run_deap(all_attribs, 
-#             all_slice_amounts,
-#             all_output_classes,
-#             max_consecutive_slices=__DEFAULT_MAX_CONSEC_SLICES, # max length of the each slices range
-#             number_of_groupings=__DEFAULT_NUMBER_OF_GROUPINGS # controls how many slices ranges there will be used
-#             ):
-            
-            run_deap(all_attribs,
-                     all_slice_amounts,
-                     all_output_classes,
-                     #possibles_bplanes, # usully means the list: (0,1,2)
-                     max_consecutive_slices, # length of slices range
-                     number_of_groupings,
-                     experiment) # controls how many slices ranges there will be used
-                     #max_slice_values, # maximum valid slice index value for each body plane
-                     #target_fitness, # sets the target fitness that will stop evolution if it was achieved
-                     #multi_cpu_ok, # enables use of multicpu to individuals evaluation
-                     #__VERBOSE)
-                
-            if __ALARM:
-                os.system('play -nq -t alsa synth {} sine {}'.format(__DURATION, __FREQ))
-        print('* All experiments have finished\nGood bye!')
         
+        all_experiments = list(range(1,number_of_experiments + 1))
+        
+        if not __MULTI_CPU_USAGE:
+            for experiment in all_experiments:
+                if __VERBOSE:
+                    print('* Running experiment {0}'.format(experiment))
+                
+                run_deap(all_attribs,
+                         all_slice_amounts,
+                         all_output_classes,
+                         max_consecutive_slices, # length of slices range
+                         number_of_groupings,
+                         experiment) # controls how many slices ranges there will be used
+
+        else:
+            cores_num = multiprocessing.cpu_count()
+            with Pool(cores_num) as p:
+                from functools import partial
+                p.map( 
+                    partial(run_deap,
+                            all_attribs,
+                            all_slice_amounts,
+                            all_output_classes,
+                            max_consecutive_slices, # length of slices range
+                            number_of_groupings),
+                    all_experiments) 
         
         if __ALARM:
             os.system('play -nq -t alsa synth {} sine {}'.format(__DURATION, __FREQ))

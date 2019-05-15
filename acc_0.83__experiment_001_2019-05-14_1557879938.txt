@@ -1,0 +1,2 @@
+gen,best_fit,individual
+  4,0.83333333,[2, 44, 4]
