@@ -39,39 +39,29 @@ __ALL_OUTPUT_VALUES = []
 __BODY_PLANES = []
 __MAX_SLICES_VALUES = []
 __MIN_SLICES_VALUES = []
-__DEFAULT_MAX_CONSEC_SLICES = 20
+__DEFAULT_MAX_CONSEC_SLICES = 8
 __DEFAULT_NUMBER_OF_GROUPINGS = 1
 
-# Evolutionary arguments
-__GENES_LOW_LIMITS = [0,0,1]
-__GENES_UP_LIMITS = [2,160,20]
+# Classifier parameters
 __DEFAULT_KNN_K_VALUE = 5
-__VERBOSE = False
 
 # Runtime Parameters
+__OUTPUT_DIRECTORY = './'
 __MULTI_CPU_USAGE = False
+__VERBOSE = False
 
 # Default Evolutionary Parameters
 __TOURNEAMENT_SIZE = 10
-__MUTATE_INDP = 0.30
+__MUTATE_INDP = 0.10
 __CROSSOVER_INDP = 0.40
-__NUMBER_OF_GENERATIONS = 100
 __POPULATION_SIZE = 200
+__NUMBER_OF_GENERATIONS = 100
+__MAX_GENERATIONS_WITHOUT_IMPROVEMENTS = 40
 __DEFAULT_TARGET_FITNESS = 0.0
 __DEFAULT_WORST_FITNESS = -1.0
-#__BEST_INDIVIDUALS_SIZE = 5
+__GENES_LOW_LIMITS = [0,0,1]
+__GENES_UP_LIMITS = [2,160,20]
 
-# Results Variables
-#queueSize = 10
-#bestFitnesses = asyncio.Queue(maxsize=queueSize)
-#bestIndividuals = asyncio.Queue(maxsize=queueSize)
-#generationsWihImprovements = asyncio.Queue(maxsize=queueSize)
-#bestConfMatrices = asyncio.Queue(maxsize=queueSize)
-#bestFitnesses = []
-bestIndividuals = []
-generationsWihImprovements = []
-#bestConfMatrices = []
-__OUTPUT_DIRECTORY = './'
 
 # Alarm Variables
 __ALARM = True
@@ -79,12 +69,6 @@ __DURATION = 1 #seconds
 __FREQ = 440 # Hz
 
 
-def getBestFit():
-    global best_ind
-    if best_ind != None:
-        return best_ind.fitness.values[0]
-    else:
-        return __DEFAULT_WORST_FITNESS
 
 def getRandomPlane(planes = __BODY_PLANES):
     plane = random.sample(planes,1)[0]
@@ -222,22 +206,55 @@ def updateGeneBounds(bplanes,
 
 
 def build_experiment_output_filename(exp_num, best_accuracy):
-    acc = 'acc_{0:.2f}_'.format(best_accuracy)
+    assay_id = str(datetime.date.today()) + '_' + str(int(round(time.time())))
+    acc_value = '{0:.2f}'.format(best_accuracy)
+    
     global __OUTPUT_DIRECTORY
     dirname = __OUTPUT_DIRECTORY
-    filename = '{3}_experiment_{0:03d}_{1}_{2}.txt'.format(exp_num,datetime.date.today(),int(round(time.time())),acc)
+    
+    filename = 'assay_{0}_acc_{1}_exp_{2:03d}.txt'.format(assay_id, acc_value, exp_num)
     output_full_filename = os.path.join(dirname, filename)
-    return output_full_filename
+    return output_full_filename, assay_id
+
+def build_parameters_text(max_consecutive_slices,number_of_groupings):
+    strPool = []
+
+    strPool.append('* Running deap with:\n')
+    strPool.append(' max_consecutive_slices={0}'.format(max_consecutive_slices))
+    strPool.append(' number_of_groupings={0}'.format(number_of_groupings))
+    strPool.append(' __BODY_PLANES={0}'.format(__BODY_PLANES))
+    strPool.append(' __MAX_SLICES_VALUES={0}'.format(__MAX_SLICES_VALUES))
+    strPool.append(' __MIN_SLICES_VALUES={0}'.format(__MIN_SLICES_VALUES))
+    strPool.append(' __VERBOSE={0}'.format(__VERBOSE))
+    strPool.append(' __DEFAULT_MAX_CONSEC_SLICES={0}'.format(__DEFAULT_MAX_CONSEC_SLICES))
+    strPool.append(' __POPULATION_SIZE={0}'.format( __POPULATION_SIZE))
+    
+    # Evolutionary arguments,)
+    strPool.append(' __TOURNEAMENT_SIZE ={0}'.format(__TOURNEAMENT_SIZE))
+    strPool.append(' __MUTATE_INDP ={0}'.format(__MUTATE_INDP))
+    strPool.append(' __CROSSOVER_INDP ={0}'.format(__CROSSOVER_INDP ))
+    strPool.append(' __NUMBER_OF_GENERATIONS ={0}'.format(__NUMBER_OF_GENERATIONS))
+    strPool.append(' __POPULATION_SIZE ={0}'.format(__POPULATION_SIZE ))
+    strPool.append(' __DEFAULT_TARGET_FITNESS ={0}'.format(__DEFAULT_TARGET_FITNESS))
+    strPool.append(' __DEFAULT_WORST_FITNESS ={0}'.format(__DEFAULT_WORST_FITNESS))
+ 
+ 
+    strPool.append(' __GENES_LOW_LIMITS ={0}'.format(__GENES_LOW_LIMITS))
+    strPool.append(' __GENES_UP_LIMITS ={0}'.format(__GENES_UP_LIMITS))
+    strPool.append(' __DEFAULT_KNN_K_VALUE ={0}'.format(__DEFAULT_KNN_K_VALUE))
+    strPool.append(' __OUTPUT_DIRECTORY ={0}'.format(__OUTPUT_DIRECTORY))
 
 def append_experiment_data_to_output_file(
         exp_num, 
         gen_num, 
-        exp_output_full_filename,
+        exp_output_full_filename, #built by build_experiment_output_filename inside saveExperimentsData function
+        best_ind,
         dbug =__VERBOSE):
     
     #global best_fit
-    global best_ind 
-    best_fit = getBestFit()
+    #global best_ind 
+    #best_fit = getBestFit()
+    bfit = best_ind.fitness.values[0]
         
     append_mode = "a"
     blank_file = False
@@ -259,10 +276,10 @@ def append_experiment_data_to_output_file(
     try :
         output_file = open(exp_output_full_filename, append_mode)
         if blank_file:
-            head = 'gen,best_fit,individual\n'
+            head = 'generation, best_fit, best_individual\n'
             output_file.write(head)
         
-        line = '{0:3d},{1:.8f},{2}\n'.format(gen_num, best_fit, best_ind)
+        line = '{0:3d},{1:.8f},{2}\n'.format(gen_num, bfit, best_ind)
         output_file.write(line)
         output_file.close()
     except os.error:
@@ -273,34 +290,33 @@ def append_experiment_data_to_output_file(
     return exp_output_full_filename
 
 
-def saveExperimentDataToFile(exp_num):
-    best_accuracy = getBestFit()
-    ofile = build_experiment_output_filename(exp_num,best_accuracy)
+def saveExperimentsDataToFile(exp_num, best_ind, bestIndividuals, generationsWithImprovements):
+    best_accuracy = best_ind.fitness.values[0]
+    ofile = build_experiment_output_filename(exp_num,best_accuracy)[0]
     print('Saving output file {0}'.format(ofile))
     
     #global bestFitnesses, bestIndividuals, generationsWihImprovements, bestConfMatrices
-    global bestIndividuals, generationsWihImprovements
+    #global bestIndividuals, generationsWihImprovements
     
-    if len(bestIndividuals) == len(generationsWihImprovements):
+    if len(bestIndividuals) == len(generationsWithImprovements):
     #if len(bestFitnesses) == len(bestIndividuals) and len(bestIndividuals) == len(generationsWihImprovements) and len(generationsWihImprovements) == len(bestConfMatrices):
 #        for fit,gnum,ind,cmat in zip(bestFitnesses,
 #                                     generationsWihImprovements,
 #                                     bestIndividuals,
 #                                     bestConfMatrices):
 #            append_experiment_data_to_output_file(exp_num,gnum,str(cmat),ofile)
-        for ind, gnum in zip(bestIndividuals, generationsWihImprovements):
+        for ind, gnum in zip(bestIndividuals, generationsWithImprovements):
             #cmat = ind.confusion_matrix
-            append_experiment_data_to_output_file(exp_num,gnum,ofile)
+            append_experiment_data_to_output_file(exp_num,gnum,ofile,ind)
         
     else:
         print('Problem with results format:\n')
-        print('len(bestIndividuals)={0}, len(generationsWihImprovements)={1}'.format(len(bestIndividuals), len(generationsWihImprovements)))
+        print('len(bestIndividuals)={0}, len(generationsWithImprovements)={1}'.format(len(bestIndividuals), len(generationsWithImprovements)))
         sys.exit(1)
 
 
-def printExperimentsResults():
+def printExperimentsResults(bestIndividuals):
     #global queueSize
-    global bestIndividuals
     for i in range(len(bestIndividuals)):
         print('Best Individual (id={0}): {1}, with Fitness: {2}'.format(bestIndividuals[i]).format)
         print('', end='', flush=True)
@@ -314,22 +330,25 @@ def printExperimentsResults():
 #    # append_data_to_experiment_output_file(line, experiment_output_file)
     
 
-def updateBestIndividual(newBestIndividual, improvementGeneration):
+def updateBestIndividual(currentBestIndividual, bestIndividualCandidate, improvementGeneration, bestIndividuals, generationsWithImprovements):
     
-    if getBestFit() < newBestIndividual.fitness.values[0]:
-        global best_ind
-        best_ind = newBestIndividual # updating best individual
+    if currentBestIndividual.fitness.values[0] < bestIndividualCandidate.fitness.values[0]:
+        #global best_ind
+        #best_ind = newBestIndividual # updating best individual
         #best_fit = newBestIndividual.fitness.values[0] # updating best fitness
         #global best_cmatrix 
         #best_cmatrix = newBestIndividual.confusion_matrix# updating best fitness
-        global bestIndividuals
-        bestIndividuals.append(newBestIndividual)
-        global generationsWihImprovements
-        generationsWihImprovements.append(improvementGeneration)
+        #global bestIndividuals
+        bestIndividuals.append(bestIndividualCandidate)
+        #global generationsWihImprovements
+        generationsWithImprovements.append(improvementGeneration)
         #global bestFitnesses
         #bestFitnesses.append(best_fit)
         #global bestConfMatrices
         #bestConfMatrices.append(best_cmatrix)
+        return bestIndividualCandidate, improvementGeneration
+    else:
+        return currentBestIndividual, generationsWithImprovements[len(generationsWithImprovements)-1]
 
 
 def run_deap(all_attribs, 
@@ -340,6 +359,12 @@ def run_deap(all_attribs,
              current_experiment=1
              ):
  
+    generationsWithImprovements = []
+    
+    bestIndividuals = []
+    best_ind = None
+    lastGenWithImprovements = 0
+    
     # Global Variables
     global __BODY_PLANES
     global __MAX_SLICES_VALUES
@@ -358,30 +383,30 @@ def run_deap(all_attribs,
     
     updateGeneBounds(__BODY_PLANES, __MIN_SLICES_VALUES, __DEFAULT_NUMBER_OF_GROUPINGS, __VERBOSE)
     
-    print('* Running deap with:')
-    print('\t* max_consecutive_slices=',max_consecutive_slices)
-    print('\t* number_of_groupings=',number_of_groupings)
-    print('\t* __BODY_PLANES=',__BODY_PLANES)
-    print('\t* __MAX_SLICES_VALUES=',__MAX_SLICES_VALUES)
-    print('\t* __MIN_SLICES_VALUES=',__MIN_SLICES_VALUES)
-    print('\t* __VERBOSE=',__VERBOSE)
-    print('\t* __DEFAULT_MAX_CONSEC_SLICES=',__DEFAULT_MAX_CONSEC_SLICES)
-    print('\t* __POPULATION_SIZE=', __POPULATION_SIZE)
-    
-    print('\t* __TOURNEAMENT_SIZE =',__TOURNEAMENT_SIZE)
-    print('\t* __MUTATE_INDP =',__MUTATE_INDP)
-    print('\t* __CROSSOVER_INDP =',__CROSSOVER_INDP )
-    print('\t* __NUMBER_OF_GENERATIONS =',__NUMBER_OF_GENERATIONS)
-    print('\t* __POPULATION_SIZE =',__POPULATION_SIZE )
-    print('\t* __DEFAULT_TARGET_FITNESS =',__DEFAULT_TARGET_FITNESS)
-    print('\t* __DEFAULT_WORST_FITNESS =',__DEFAULT_WORST_FITNESS)
-    
-    # Evolutionary arguments,)
-    print('\t* __GENES_LOW_LIMITS = ',__GENES_LOW_LIMITS)
-    print('\t* __GENES_UP_LIMITS = ',__GENES_UP_LIMITS)
-    print('\t* __DEFAULT_KNN_K_VALUE = ',__DEFAULT_KNN_K_VALUE)
-    print('\t* __VERBOSE = ',__VERBOSE)
-    print('\t* __OUTPUT_DIRECTORY = ',__OUTPUT_DIRECTORY)
+#    print('* Running deap with:')
+#    print('\t* max_consecutive_slices=',max_consecutive_slices)
+#    print('\t* number_of_groupings=',number_of_groupings)
+#    print('\t* __BODY_PLANES=',__BODY_PLANES)
+#    print('\t* __MAX_SLICES_VALUES=',__MAX_SLICES_VALUES)
+#    print('\t* __MIN_SLICES_VALUES=',__MIN_SLICES_VALUES)
+#    print('\t* __VERBOSE=',__VERBOSE)
+#    print('\t* __DEFAULT_MAX_CONSEC_SLICES=',__DEFAULT_MAX_CONSEC_SLICES)
+#    print('\t* __POPULATION_SIZE=', __POPULATION_SIZE)
+#    
+#    print('\t* __TOURNEAMENT_SIZE =',__TOURNEAMENT_SIZE)
+#    print('\t* __MUTATE_INDP =',__MUTATE_INDP)
+#    print('\t* __CROSSOVER_INDP =',__CROSSOVER_INDP )
+#    print('\t* __NUMBER_OF_GENERATIONS =',__NUMBER_OF_GENERATIONS)
+#    print('\t* __POPULATION_SIZE =',__POPULATION_SIZE )
+#    print('\t* __DEFAULT_TARGET_FITNESS =',__DEFAULT_TARGET_FITNESS)
+#    print('\t* __DEFAULT_WORST_FITNESS =',__DEFAULT_WORST_FITNESS)
+#    
+#    # Evolutionary arguments,)
+#    print('\t* __GENES_LOW_LIMITS = ',__GENES_LOW_LIMITS)
+#    print('\t* __GENES_UP_LIMITS = ',__GENES_UP_LIMITS)
+#    print('\t* __DEFAULT_KNN_K_VALUE = ',__DEFAULT_KNN_K_VALUE)
+#    print('\t* __VERBOSE = ',__VERBOSE)
+#    print('\t* __OUTPUT_DIRECTORY = ',__OUTPUT_DIRECTORY)
 
     if 'FitnessMax' not in globals():
         creator.create("FitnessMax", base.Fitness, weights=(1.0,))
@@ -427,20 +452,10 @@ def run_deap(all_attribs,
     # creating initial individuals
     pop = toolbox.population(n=__POPULATION_SIZE)
     
-    # best indivudal tracking
-    global best_ind
-    #global best_fit
-    #global best_conf_matrix
-    #best_fit = -1.0
-    best_ind = pop[0]
     
-    # Queue (FIFO) where best individuals are saved in
-    #global bestFitnesses
-    global bestIndividuals
-    #global bestConfMatrices
-    global generationsWihImprovements
-    
-    
+    # Initializing variables
+    best_ind = pop[0]            
+    current_generation = 0
     
     # Evaluate initial population
     fits_and_matrices = list(map(toolbox.evaluate, pop))
@@ -449,13 +464,12 @@ def run_deap(all_attribs,
         ind.confusion_matrix = fit_and_matrix_tuple[1]
         
         # Tracking new best individuals
-        if ind.fitness.values[0] > getBestFit(): # It's a maximization problem
+        if ind.fitness.values[0] > best_ind.fitness.values[0]: # It's a maximization problem!!
             best_ind = ind
+            generationsWithImprovements.append(current_generation)
+            bestIndividuals.append(ind)
             
-            
-    current_generation = 0
-    updateBestIndividual(best_ind, current_generation) # New individual has found on the initial population
-        
+       
     print('Initial best individual: {0} (fitness={1})'.format(best_ind,best_ind.fitness.values[0]))
     
     toolbox.register("mate", tools.cxUniform, indpb=__CROSSOVER_INDP) # crossing
@@ -553,14 +567,19 @@ def run_deap(all_attribs,
             # tracking new best individual
             if fit > best_ind.fitness.values[0]:
                 print('\t New BEST Individual {0} with Fitness={1} was found!'.format(offspring[i],fit))
-                updateBestIndividual(offspring[i],gen)
+                best_ind, lastGenWithImprovements = updateBestIndividual(best_ind, offspring[i],gen, bestIndividuals, generationsWithImprovements)
+                
+        if (gen - lastGenWithImprovements) >= __MAX_GENERATIONS_WITHOUT_IMPROVEMENTS:
+            break # stops evolution!!
+            if __VERBOSE:
+                print('Evolution was interrupted: More than {0} without improvements!'.format(__MAX_GENERATIONS_WITHOUT_IMPROVEMENTS))
                 
             
         
     if __VERBOSE:
-        print('\t* Best Individuals Found:')
-        for ind, gen in zip(bestIndividuals, generationsWihImprovements):
-            print('\tbest_fit={0:.6f}\t best_ind={1}\t at generation={2}'.format(ind.fitness.values[0],ind,gen))
+        print('\t* Best Individuals Found in {0}th experiment :'.format(current_experiment))
+        for ind, gen in zip(bestIndividuals, generationsWithImprovements):
+            print('current_experiment={3:2d}  best_fit={0:.6f}   best_ind={1}   at generation={2}'.format(ind.fitness.values[0],ind,gen,current_experiment))
             
     
         print('\n\t*Evolution process has finished')
@@ -570,12 +589,16 @@ def run_deap(all_attribs,
     #exp_output_filename = build_experiment_output_filename(current_experiment,best_fit)
     
     #saving data to output file"
-    saveExperimentDataToFile(current_experiment)
+    
+    saveExperimentsDataToFile(current_experiment, best_ind, bestIndividuals, generationsWithImprovements)
+
     
     print('Best Individual Found is: ', best_ind)
-    print('\t* Fitness: ', getBestFit())
+    print('\t* Fitness: ', best_ind.fitness.values[0])
     print('\t* Confusion Matrix:\n', best_ind.confusion_matrix)
     
+
+
 
 # REVISAR!!
 def display_help(script_name=None):
