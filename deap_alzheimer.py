@@ -53,16 +53,16 @@ __MULTI_CPU_USAGE = False
 
 # Default Evolutionary Parameters
 __TOURNEAMENT_SIZE = 10
-__MUTATE_INDP = 0.10
-__CROSSOVER_INDP = 0.4
-__NUMBER_OF_GENERATIONS = 5
-__POPULATION_SIZE = 120
+__MUTATE_INDP = 0.30
+__CROSSOVER_INDP = 0.40
+__NUMBER_OF_GENERATIONS = 100
+__POPULATION_SIZE = 200
 __DEFAULT_TARGET_FITNESS = 0.0
 __DEFAULT_WORST_FITNESS = -1.0
-__BEST_INDIVIDUALS_SIZE = 5
+#__BEST_INDIVIDUALS_SIZE = 5
 
 # Results Variables
-queueSize = 10
+#queueSize = 10
 #bestFitnesses = asyncio.Queue(maxsize=queueSize)
 #bestIndividuals = asyncio.Queue(maxsize=queueSize)
 #generationsWihImprovements = asyncio.Queue(maxsize=queueSize)
@@ -299,9 +299,9 @@ def saveExperimentDataToFile(exp_num):
 
 
 def printExperimentsResults():
-    global queueSize
+    #global queueSize
     global bestIndividuals
-    for i in range(queueSize):
+    for i in range(len(bestIndividuals)):
         print('Best Individual (id={0}): {1}, with Fitness: {2}'.format(bestIndividuals[i]).format)
         print('', end='', flush=True)
 #def saveExperimentData(currentGeneration, 
