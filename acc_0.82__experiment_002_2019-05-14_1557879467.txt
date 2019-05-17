@@ -1,2 +1,0 @@
-gen,best_fit,individual
-  4,0.82142857,[2, 60, 18]
