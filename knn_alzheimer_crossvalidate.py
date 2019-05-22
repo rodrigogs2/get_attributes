@@ -64,7 +64,7 @@ print('-Total memory usage to load all the {0} data files is:\n\t\t{1} bytes'.fo
 
 #attribs,body_plane,slice_num = loadattribs.load_attribs_and_metadata(attribs_files[0])
 '''
-def KFoldCrossValidation(train_and_test_indexes, X_data_frame, y_data_frame, k_value=3, kcv_value=10, smote=True, debug=False):
+def KFoldCrossValidation(train_and_test_indexes, X_data_frame, y_data_frame, k_value=3, kcv_value=9, smote=True, debug=False):
     train_indexes = train_and_test_indexes[0]
     #print('Train Indexes:',train_indexes)
     test_indexes = train_and_test_indexes[1]
@@ -136,7 +136,7 @@ def runKNN(X_data,
         use_smote=True, 
         use_rescaling=True,
         cv_type='kcv',
-        kcv_value=10,
+        kcv_value=9,
         use_Pool=False
         ):
     
