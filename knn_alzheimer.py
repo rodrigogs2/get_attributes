@@ -144,7 +144,10 @@ def runKNN(
         # Oversampling training data using SMOTE
         if knn_debug: 
             print('* Starting to oversample training data using SMOTE...')
-            print('\t -Instances amount from each class BEFORE to apply SMOTE=',(sum(y_train==0),sum(y_train==1),sum(y_train==2)))
+            print('\t -Number of instances inside TRAIN set from each class BEFORE to apply SMOTE=',(sum(y_train==0),sum(y_train==1),sum(y_train==2)))
+            print('\t -Number of instances inside TEST set from each class BEFORE to apply SMOTE=',(sum(y_test==0),sum(y_test==1),sum(y_test==2)))
+            print('\t -Number of instances inside TRAIN set from each class BEFORE to apply SMOTE=',(sum(y_train==0),sum(y_train==1),sum(y_train==2)))
+            print('\t -Number of instances inside TEST set  from each class BEFORE to apply SMOTE=',(sum(y_test==0),sum(y_test==1),sum(y_test==2)))
 
         from imblearn.over_sampling import SMOTE
         smt = SMOTE()
@@ -184,10 +187,19 @@ def main(argv):
     # KNN Parameters
     K_VALUE = 5
     
+    # Seeds test
+    USE_KNOWN_GOOD_SLICE_GROUPING = True
+    
     # Use this arguments to set the input directory of attributes files
-    attributes_dir = "../../attributes_amostra"
+    __USE_SAMPLE_DATA_DIR = False
+    __SAMPLE_DATA_DIR = "../../attributes_amostra"
+    __FULL_DATA_DIR = "../../attributes2"
+    
+    attributes_dir = __FULL_DATA_DIR
     csv_file = './ADNI1_Complete_All_Yr_3T.csv'
 
+    if __USE_SAMPLE_DATA_DIR:
+        attributes_dir = __SAMPLE_DATA_DIR
     
     # Getting all data
     
@@ -212,13 +224,19 @@ def main(argv):
 #                           max_indexes = __DEFAULT_MAX_SLICES_VALUES,    # Maximum value for the first slice index 
 #                           dbug=__DEFAULT_DEBUG):
     
-    print('* Building a random valid slice grouping... ', end='')
+    if USE_KNOWN_GOOD_SLICE_GROUPING:
+        print('* Using a specific known good slice grouping... ', end='')
+        
+        bplane, start_slice, total_slices = [2, 114, 15]
+    else:
+        print('* Building a random valid slice grouping... ', end='')
+        
+        bplane, start_slice, total_slices = deap_alzheimer.buildRandomSliceGrouping(
+                planes = valid_bplanes,
+                length = 30,
+                max_indexes = min_slices_values,
+                dbug=False)
     
-    bplane, start_slice, total_slices = deap_alzheimer.buildRandomSliceGrouping(
-            planes = valid_bplanes,
-            length = 30,
-            max_indexes = min_slices_values,
-            dbug=False)
     print('done. Slice grouping: [{0}, {1}, {2}]'.format(bplane,start_slice,total_slices))
     
    

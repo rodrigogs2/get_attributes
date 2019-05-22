@@ -8,7 +8,7 @@ Created on Wed Mar 13 08:33:13 2019
 
 import loadattribs
 
-from sklearn.neighbors import KNeighborsClassifier
+
 from sklearn.model_selection import KFold
 from sklearn.model_selection import train_test_split
 from sklearn import metrics
@@ -29,9 +29,11 @@ def KFoldCrossValidation(train_and_test_indexes, X_data_frame, y_data_frame, cla
     model = None
     
     if classifier == 'knn':
+        from sklearn.neighbors import KNeighborsClassifier
         model = KNeighborsClassifier(n_neighbors=k_value)
     elif classifier == 'nbayes':
-        model = KNeighborsClassifier(n_neighbors=k_value)
+        from sklearn.naive_bayes import GaussianNB
+        model = GaussianNB()
     else:
         raise ValueError('Unknown Classifier: {0}'.format(classifier))
         sys.exit(0);
@@ -293,8 +295,8 @@ def runKNN(X_data,
 
 def main(argv):
     
-    __TOTAL_RUNNINGS = 10
-    __CLASSIFIER = 'nbayes'#'knn' #'nbayes'
+    __TOTAL_RUNNINGS = 100
+    __CLASSIFIER = 'knn' #'nbayes'
     
     # KNN Parameters
     K_VALUE = 3

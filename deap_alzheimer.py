@@ -13,7 +13,7 @@ from deap import base, creator, tools, algorithms
 #from random import samplei
 import random, sys, os
 import loadattribs 
-import knn_alzheimer
+import knn_alzheimer_crossvalidate
 import getopt
 import time
 import datetime
@@ -43,21 +43,32 @@ __DEFAULT_MAX_CONSEC_SLICES = 20
 __DEFAULT_NUMBER_OF_GROUPINGS = 1
 
 # Classifier parameters
-__DEFAULT_KNN_K_VALUE = 5
+__CLASSFIERS = ['knn','naive_bayes']
+__DEFAULT_KNN_K_VALUE = 3
+__USE_RESCALING = True
+__USE_SMOTE = True
+__CV_TYPE = 'kcv'
+__CV_MULTI_THREAD_ = False
+__KCV_FOLDS = 10
 
 # Runtime Parameters
 __DEAP_RUN_ID = ''
-__OUTPUT_DIRECTORY = '../'
+__OUTPUT_DIRECTORY = './'
 __MULTI_CPU_USAGE = False
 __VERBOSE = False
 
 # Default Evolutionary Parameters
-__TOURNEAMENT_SIZE = 10
 __MUTATE_INDP = 0.10
 __CROSSOVER_INDP = 0.40
-__POPULATION_SIZE = 300
-__NUMBER_OF_GENERATIONS = 200
+__POPULATION_SIZE = 100
+__NUMBER_OF_GENERATIONS = 120
 __MAX_GENERATIONS_WITHOUT_IMPROVEMENTS = 40
+#__TOURNEAMENT_SIZE_IS_DYNAMIC = True
+__INITIAL_TOURNEAMENT_SIZE = int(__POPULATION_SIZE * 0.02)
+#__MAX_TORNEAMENT_SIZE = int(__POPULATION_SIZE * 0.20)
+__TOURNEAMENT_SIZE = __INITIAL_TOURNEAMENT_SIZE
+#__TOURNEAMENT_SIZE_INCREMENT_VALUE = int(__POPULATION_SIZE * 0.02)
+#__TOURNEAMENT_SIZE_INCREMENT_GENERATIONS_NEEDED = __NUMBER_OF_GENERATIONS * 
 __DEFAULT_TARGET_FITNESS = 0.0
 __DEFAULT_WORST_FITNESS = -1.0
 __GENES_LOW_LIMITS = [0,0,1]
@@ -128,7 +139,7 @@ def evaluateSlicesGroupingsKNN(individual, # list of integers
                                all_attribs,
                                all_slice_amounts,
                                output_classes,
-                               k_value=5,
+                               k_value=__DEFAULT_KNN_K_VALUE,
                                debug=__VERBOSE):
     
     all_groupings_partitions_list = [] 
@@ -158,9 +169,21 @@ def evaluateSlicesGroupingsKNN(individual, # list of integers
     for i in range(1,len(all_groupings_partitions_list)):
         all_partitions_merged = all_partitions_merged + all_groupings_partitions_list[i]
     
+    
+    global __USE_RESCALING, __USE_SMOTE, __CV_TYPE, __CV_MULTI_THREAD_, __KCV_FOLDS
+    
     # Classifying merged data
-    accuracy, conf_matrix = knn_alzheimer.runKNN(all_partitions_merged, output_classes, knn_debug=debug)
-
+    accuracy, conf_matrix = knn_alzheimer_crossvalidate.runKNN(
+            all_partitions_merged,
+            output_classes,
+            k_value,
+            knn_debug=debug,
+            use_smote=__USE_SMOTE,
+            use_rescaling=__USE_RESCALING,
+            cv_type=__CV_TYPE,
+            kcv_value=__KCV_FOLDS,
+            use_Pool=__CV_MULTI_THREAD_)
+    
     
     return accuracy, conf_matrix
 
@@ -188,12 +211,14 @@ def updateGeneBounds(bplanes,
     up_limits_per_slice_grouping = [len(bplanes),
                                     min(slices_limits),
                                     max_consec_slices]
+    #print('up_limits_per_slice_grouping=',up_limits_per_slice_grouping)
     
     all_up_limits = []
     all_low_limits = []
     for n in range(number_of_slices_groupings):
         all_up_limits = all_up_limits + up_limits_per_slice_grouping
         all_low_limits = all_low_limits + low_limits_per_slice_grouping
+        #print('all_up_limits=',all_up_limits)
         
     global __GENES_LOW_LIMITS
     global __GENES_UP_LIMITS
@@ -201,10 +226,11 @@ def updateGeneBounds(bplanes,
     __GENES_LOW_LIMITS = all_low_limits
     __GENES_UP_LIMITS = all_up_limits
     
-    if dbug:
-        print('updating global MUTATE Low Limits...')
-        print('__GENES_LOW_LIMITS: ',__GENES_LOW_LIMITS)
-        print('__GENES_UP_LIMITS: ',__GENES_UP_LIMITS)
+    
+    #if dbug:
+    #print('updating genes Limits...')
+    #print('__GENES_LOW_LIMITS: ',__GENES_LOW_LIMITS)
+    #print('__GENES_UP_LIMITS: ',__GENES_UP_LIMITS)
 
 
 def build_parameters_string(max_consecutive_slices,number_of_groupings):
@@ -299,6 +325,8 @@ def saveParametersFile(max_consec_slices,num_groupings):
     except os.error:
         print("\n*** ERROR: file %s can not be written" % param_full_filename)
         exit(1)
+    
+    return param_full_filename
     
     
 
@@ -422,8 +450,9 @@ def run_deap(all_attribs,
     # Updating global variables
     __BODY_PLANES = loadattribs.getBplanes(all_slice_amounts)
     __MIN_SLICES_VALUES,__MAX_SLICES_VALUES = loadattribs.getSliceLimits(all_slice_amounts)
+    #print('__MIN_SLICES_VALUES=',__MIN_SLICES_VALUES,'\n__MIN_SLICES_VALUES=',__MIN_SLICES_VALUES)
     
-    updateGeneBounds(__BODY_PLANES, __MIN_SLICES_VALUES, __DEFAULT_NUMBER_OF_GROUPINGS, __VERBOSE)
+    updateGeneBounds(__BODY_PLANES, __MIN_SLICES_VALUES, max_consecutive_slices, __DEFAULT_NUMBER_OF_GROUPINGS, __VERBOSE)
     
     #if 'FitnessMax' not in globals() and current_experiment == 1:
     creator.create("FitnessMax", base.Fitness, weights=(1.0,))
@@ -471,12 +500,15 @@ def run_deap(all_attribs,
     
    
     # Initializing variables
-    best_ind = pop[0]            
+    best_ind = pop[0]
+    print('# Initial best_ind=',best_ind,' Exp=',current_experiment)          
     current_generation = 0
-    #new_best_found = False
+
     
     # Evaluate initial population
     fits_and_matrices = list(map(toolbox.evaluate, pop))
+    
+    
     for ind, fit_and_cmatrix_tuple in zip(pop, fits_and_matrices):
         ind.fitness.values = fit_and_cmatrix_tuple[0],
         ind.confusion_matrix = fit_and_cmatrix_tuple[1]
@@ -507,6 +539,7 @@ def run_deap(all_attribs,
         def decorator(func):
             def wrapper(*args, **kargs):
                 offspring = func(*args, **kargs)
+                global __GENES_UP_LIMITS, __GENES_LOW_LIMITS
                 
                 for child in offspring:
                     for i in range(len(child)):
@@ -559,13 +592,14 @@ def run_deap(all_attribs,
     number_of_generations = __NUMBER_OF_GENERATIONS
     
     
-    print('\n* Initializing evolution along to {0} generations'.format(number_of_generations))
+    #print('\n* Initializing evolution along to {0} generations'.format(number_of_generations))
     
     generations = list(range(1,number_of_generations + 1))
     
     for current_generation in generations:
+        print('\n* Experiment {0:3d}: Initializing {1:3}th generation...'.format(current_experiment,current_generation))
         if __VERBOSE:
-            print('\n* Experiment {0:3d}: Initializing {1:3}th generation...'.format(current_experiment,current_generation))
+            
             print('\tCurrent BEST fitness = {0:.6f}'.format(best_ind.fitness.values[0]))
                   
             print('\t* Running variation operators...',end='')
@@ -578,13 +612,13 @@ def run_deap(all_attribs,
             print('\t Done!')
             print('\t* Evaluating offspring...',end='')
         fits_and_matrices = list(map(toolbox.evaluate,offspring)) # list of (fitness,conf_matrix) tuples
-        
         if __VERBOSE:
             print('\t Done!')
-            print('\t* Updating fitness and confusion matrix of offspring...',end='')
             
-        new_best_found = False
-        for i in range(len(offspring)):
+            
+        if __VERBOSE:
+            print('\t* Updating fitness and confusion matrix of offspring...',end='')
+        for i in list(range(len(offspring))):
             # fitness should be a one element tuple
             fit = fits_and_matrices[i][0]
             offspring[i].fitness.values = fit, # updating offspring fitness
@@ -595,23 +629,22 @@ def run_deap(all_attribs,
             
             # tracking new best individual
             if fit > best_ind.fitness.values[0]:
-                new_best_found = True
+                print('old best fit={0} (ind={4}) new best fit={1} (ind={5}) at exp={3} gen={2}'.format(best_ind.fitness.values[0],fit,current_generation,current_experiment,best_ind,offspring[i]))
+                #new_best_found = True
                 best_ind = offspring[i]
                 lastGenWithImprovements = current_generation
         
-        if new_best_found:
+        if lastGenWithImprovements == current_generation:
             # saving improvements
-            new_best_found = False
             bestIndividuals.append(best_ind)
             generationsWithImprovements.append(current_generation)
-            print('\n\t\t*** Best Individuals found in the {0}th experiment: {1} (fitness={2})'.format(current_experiment,ind,ind.fitness.values[0]))
+            print('\n\t* Improvement at {0}th experiment: {1} with fitness={2} at generation={3}'.format(current_experiment,ind,ind.fitness.values[0],current_generation))
+        else:
+            print('\t*** WARNING: Consecutive generations without improvements for {1}th experiment= {0}'.format(current_generation - lastGenWithImprovements,current_experiment))
         
         if __VERBOSE:
             print(' Done!')
                 
-        if not new_best_found:
-            print('\t *** WARNING: Consecutive generations without improvements = {0}'.format(
-                current_generation - lastGenWithImprovements))
         
         if (current_generation - lastGenWithImprovements) >= __MAX_GENERATIONS_WITHOUT_IMPROVEMENTS:
             if __VERBOSE:
@@ -758,9 +791,8 @@ def main(argv):
         
         print('Running experiments...')
         
-        print('Saving parameters list to file... ',end='')
-        saveParametersFile(max_consecutive_slices,number_of_groupings)
-        print('Done!')
+        pfilename = saveParametersFile(max_consecutive_slices,number_of_groupings)
+        print('Saving parameters list to file {0}'.format(pfilename))
         
         all_experiments = list(range(1,number_of_experiments + 1))
         
