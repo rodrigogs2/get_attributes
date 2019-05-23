@@ -9,6 +9,9 @@ Created on Wed Mar 13 08:33:13 2019
 import loadattribs
 
 from sklearn.neighbors import KNeighborsClassifier
+from sklearn.svm import SVC
+
+
 from sklearn.model_selection import KFold
 from sklearn.model_selection import train_test_split
 from sklearn import metrics
@@ -324,6 +327,202 @@ def runKNN(X_data,
 
     return accuracy, confusion_matrix
 
+def runSVM(X_data,
+        y_data,
+        k_value=3, 
+        knn_debug=False, 
+        use_smote=True, 
+        use_rescaling=True,
+        cv_type='kcv',
+        kcv_value=9,
+        use_Pool=False
+        ):
+    
+    # Main variables
+    model = SVC()
+    #knn = KNeighborsClassifier(n_neighbors=k_value)
+    accuracy = 0
+    confusion_matrix = []
+    
+    if knn_debug: 
+        print('* Checking arguments formating...')
+        print('\t-X_data.shape=',X_data.shape)
+        print('\t-y_data.shape=',y_data.shape)
+    
+    # Data preparation
+    try:
+        new_dimensions = (X_data.shape[0],
+                          X_data.shape[1]*X_data.shape[2])
+    except IndexError:
+        print('** IndexValue exception')
+        print('\tX_data.shape=',X_data.shape)
+        print('\ty_data.shape=',y_data.shape)
+        print('\t')
+        sys.exit(-1)
+    
+    if knn_debug: 
+        print('* Reshaping for this data partition with these dimensions:',new_dimensions)
+    
+    new_partition = np.reshape(X_data, new_dimensions)
+        
+    if knn_debug: 
+        print('...done')
+    
+    
+    if knn_debug:
+        print('* The shape of a line data retrived from the new partition=', new_partition[0].shape)
+
+    ## KNN preparation
+    
+    # Preparing data to use with PANDAS
+    X_pandas = pd.DataFrame(data=new_partition)
+    y_pandas = pd.DataFrame(data=y_data)
+    
+    if knn_debug:
+        print('* Preparing data to use with Pandas...')
+        print('X_pandas=\n',X_pandas)
+        print('y_pandas=\n',y_pandas)
+
+    # Rescalling data
+    if use_rescaling:
+        if knn_debug: 
+            print('* Rescalling data... ',end='')
+        from sklearn import preprocessing
+        scaler = preprocessing.StandardScaler()
+        X_pandas = scaler.fit_transform(X_pandas) # Fit your data on the scaler object
+        if knn_debug: 
+            print('done')
+            print('Rescaled X_pandas=\n',X_pandas)
+    
+    
+    #######################################################    
+    if cv_type == 'kcv': # K-FOLD CROSS VALIDATION
+        scores = []
+        matrices = []
+        all_results = []
+        
+        cv = KFold(n_splits=kcv_value, random_state=42, shuffle=True)
+        both_indexes = cv.split(X_pandas)
+        
+        #-----------------------------------
+        if not use_Pool: # Single Thread KCrossValidation
+            
+            
+            # Single Thread KCrossValidation
+            for indexes in both_indexes:
+                
+                result = KFoldCrossValidation(indexes, X_pandas,
+                                              y_pandas, k_value,
+                                              kcv_value, use_smote,
+                                              knn_debug)
+                all_results.append(result)
+            
+            for acc_with_cmat in all_results:
+                acc = acc_with_cmat[0]
+                cmat = acc_with_cmat[1]
+                scores.append(acc)
+                matrices.append(cmat)
+                
+            np_scores = np.array(scores)
+            best_pos = np_scores.argmax()
+            
+            accuracy = np.mean(np_scores)
+            confusion_matrix = matrices[best_pos]
+            
+        #-----------------------------------
+        else: 
+            # Multi Thread KCrossValidation
+            # NOT WORKING YET!!
+            cores_num = multiprocessing.cpu_count()
+            with Pool(processes=cores_num) as p:
+                from functools import partial
+
+                all_results = p.map(
+                    partial(KFoldCrossValidation,
+                            X_data_frame=X_pandas,
+                            y_data_frame=y_pandas,
+                            k_value=k_value,
+                            kcv_value=kcv_value,
+                            smote=use_smote,
+                            debug=knn_debug),
+                    both_indexes)
+
+            for acc_with_cmat in all_results:
+                acc = acc_with_cmat[0]
+                cmat = acc_with_cmat[1]
+                scores.append(acc)
+                matrices.append(cmat)
+                
+            np_scores = np.array(scores)
+            best_pos = np_scores.argmax()
+            
+            accuracy = np.mean(np_scores)
+            confusion_matrix = matrices[best_pos]
+
+#########################
+    else:
+    
+        # validation with simple split data between test and train sets
+        if knn_debug:
+            print('* Starting train and test sets splitting... ',end='')
+        X_train, X_test, y_train, y_test = train_test_split(
+                X_pandas, 
+                np.ravel(y_pandas), 
+                test_size=0.3, 
+                random_state=12)
+        if knn_debug:
+            print('done')
+    
+        # print the shapes of the new X objects
+        if knn_debug:
+            print('* Display X and y objects\'s shape:')
+            print('\t X_train.shape: ', X_train.shape)
+            print('\t X_test.shape: ', X_test.shape)
+            print('\t y_train.shape: ', y_train.shape)
+            print('\t y_test.shape: ', y_test.shape)
+    
+        
+        if use_smote:
+            # Oversampling training data using SMOTE
+            if knn_debug: 
+                print('* Starting to oversample training data using SMOTE...')
+                print('\t -Number of instances inside TRAIN set from each class BEFORE to apply SMOTE=',(sum(y_train==0),sum(y_train==1),sum(y_train==2)))
+                print('\t -Number of instances inside TEST set from each class BEFORE to apply SMOTE=',(sum(y_test==0),sum(y_test==1),sum(y_test==2)))
+                print('\t -Number of instances inside TRAIN set from each class BEFORE to apply SMOTE=',(sum(y_train==0),sum(y_train==1),sum(y_train==2)))
+                print('\t -Number of instances inside TEST set  from each class BEFORE to apply SMOTE=',(sum(y_test==0),sum(y_test==1),sum(y_test==2)))
+    
+            from imblearn.over_sampling import SMOTE
+            smt = SMOTE()
+            X_train, y_train = smt.fit_sample(X_train, y_train)
+        
+            if knn_debug: 
+                print('\t -Instances amount from each class AFTER to apply SMOTE=',(sum(y_train==0),sum(y_train==1),sum(y_train==2)))
+        
+        # print the shapes of the new X and y objects
+        if knn_debug:
+            print('* Display X and y objects\'s shape after apply SMOTE to this sets:')
+            print('\t X_train.shape: ', X_train.shape)
+            print('\t X_test.shape (should be the same): ', X_test.shape)
+            print('\t y_train.shape: ', y_train.shape)
+            print('\t y_test.shape (should be the same): ', y_test.shape)
+            
+        # STEP 2: train the model on the training set
+        #knn = KNeighborsClassifier(n_neighbors=k_value)
+        model.fit(X_train, y_train)
+        
+        # STEP 3: make predictions on the testing set
+        y_pred = model.predict(X_test)
+        #if knn_debug: 
+        #    print('y_pred=\n',y_pred)
+        #    print('y_pred.shape:',y_pred.shape)
+        
+        # compare actual response values (y_test) with predicted response values (y_pred)
+        accuracy = metrics.accuracy_score(y_test, y_pred) 
+        confusion_matrix = metrics.confusion_matrix(y_test,y_pred,labels=None,sample_weight=None)
+
+
+    return accuracy, confusion_matrix
+
 def main(argv):
     
     __TOTAL_RUNNINGS = 50
@@ -411,7 +610,7 @@ def main(argv):
     all_cmat = []
     
     for r in list(range(__TOTAL_RUNNINGS)):
-        accuracy, conf_matrix = runKNN(data_partition, 
+        accuracy, conf_matrix = runSVM(data_partition, 
                                        output_classes, 
                                        K_VALUE,
                                        knn_debug=KNN_DEBUG,

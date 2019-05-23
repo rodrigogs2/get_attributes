@@ -103,6 +103,23 @@ def build_models_list(knn_k_value=3,lr_solver='sag',lr_multiclass='ovr'):
     models.append(('LR', LogisticRegression(solver=lr_solver, multi_class=lr_multiclass)))
     return models
 
+def all_metrics():
+    metrics = []
+    metrics.append('name')
+    metrics.append('mean_acc')
+    metrics.append('std_acc')
+    metrics.append('best_acc')
+    metrics.append('best_cmat')
+    metrics.append('worst_acc')
+    metrics.append('worst_cmat')
+    metrics.append('total_time')
+    metrics.append('all_acc')
+    metrics.append('all_cmat')
+    metrics.append('median_acc')
+    metrics.append('median_cmat')
+    return metrics
+    
+
 def evaluate_model_using_smote_and_rescaling(all_train_and_test_indexes, 
                                              X_data, 
                                              y_data,
@@ -175,16 +192,20 @@ def evaluate_model_using_smote_and_rescaling(all_train_and_test_indexes,
 #    print('length of all_acc={0} and np_all_acc={1}'.format(len(all_acc),len(np_all_acc)))
     
     # Finding position of the best and the worst individual
-    best_acc_pos  = np_all_acc.argmax() if maximization else np_all_acc.argmin()
-    worst_acc_pos = np_all_acc.argmin() if maximization else np_all_acc.argmax()
+    best_acc_pos  = np.argmax(np_all_acc) if maximization else np.argmin(np_all_acc)
+    worst_acc_pos = np.argmin(np_all_acc) if maximization else np.argmax(np_all_acc)
+    median_pos = folds//2
+    
     best_acc = np_all_acc[best_acc_pos]
     best_cmat = all_cmat[best_acc_pos]
     worst_acc = all_acc[worst_acc_pos]
     worst_cmat = all_cmat[worst_acc_pos]
+    
     mean_acc = np_all_acc.mean()
-    median_acc = np_all_acc[folds//2] if folds % 2 == 1 else (np_all_acc[(folds+1)//2] + np_all_acc[(folds-1)//2])//2
-    median_cmat = all_cmat[folds//2] if folds % 2 == 1 else None        
-    median_acc = np_all_acc[folds//2]
+    
+    median_acc = np_all_acc[median_pos] #np_all_acc[folds//2] if folds % 2 == 1 else (np_all_acc[(folds+1)//2] + np_all_acc[(folds-1)//2])//2
+    median_cmat = all_cmat[median_pos]
+    
     std_acc = np_all_acc.std()
     
     # Calculing execution time
@@ -194,91 +215,98 @@ def evaluate_model_using_smote_and_rescaling(all_train_and_test_indexes,
     #dic = {'name':name, 'mean_acc':mean_acc, 'std_acc':std_acc, 'best_acc':best_acc, 
     #'best_cmat':best_cmat, 'worst_acc':worst_acc, 'worst_cmat':worst_cmat, 'total_time':total_time, 'all_acc':np_all_acc, 'all_cmat':all_cmat, 'median_acc':median_acc, 'median_cmat':median_cmat}
     
+    metrics_list = [name,mean_acc,best_acc,std_acc,best_cmat,worst_acc,worst_cmat,total_time,all_acc,all_cmat,median_acc,median_cmat]
+
+    metrics_names = all_metrics()
     dic = {}
-    dic['name'] = name
-    dic['mean_acc'] = mean_acc
-    dic['std_acc'] = std_acc
-    dic['best_acc'] = best_acc
-    dic['best_cmat'] = best_cmat
-    dic['worst_acc'] = worst_acc
-    dic['worst_cmat'] = worst_cmat
-    dic['total_time'] = total_time
-    dic['all_acc'] = all_acc
-    dic['all_cmat'] = all_cmat
-    dic['median_acc'] = median_acc
-    dic['median_cmat'] = median_cmat
+    for metric_num in range(len(metrics_names)):
+        name = metrics_names[metric_num]
+        dic[name] = metrics_list[metric_num]
+        
+#    dic['name'] = name
+#    dic['mean_acc'] = mean_acc
+#    dic['std_acc'] = std_acc
+#    dic['best_acc'] = best_acc
+#    dic['best_cmat'] = best_cmat
+#    dic['worst_acc'] = worst_acc
+#    dic['worst_cmat'] = worst_cmat
+#    dic['total_time'] = total_time
+#    dic['all_acc'] = all_acc
+#    dic['all_cmat'] = all_cmat
+#    dic['median_acc'] = median_acc
+#    dic['median_cmat'] = median_cmat
     
     return dic
 	
 
-def evaluate_all(X_pandas, y_pandas, knn_k_value,lr_solver,lr_multiclass,
-                 use_multiprocess=True, use_smote=True, use_rescaling=True, 
-                 cv_shuffle = True, kcv_folds=11, cv_seed=7, 
-                 ):
-    
-    
-    models = build_models_list(knn_k_value,lr_solver,lr_multiclass)
-
-#    if len(models_names) != len(models):
-#        raise ValueError('models_name length ({0}) != models length ({1})'.format(len(models_names),len(models)))
-#        exit(1)
+#def evaluate_all(X_pandas, y_pandas, knn_k_value,lr_solver,lr_multiclass,
+#                 use_multiprocess=True, use_smote=True, use_rescaling=True, 
+#                 cv_shuffle = True, kcv_folds=11, cv_seed=7, 
+#                 ):
 #    
-    cores_num = multiprocessing.cpu_count() # used by n_jobs
-
-    # Validation setup
-    cv = model_selection.KFold(n_splits=kcv_folds, random_state=cv_seed, shuffle=cv_shuffle)
-    both_indexes = cv.split(X_pandas)
-
-    # results variables
-    all_results_tuples = []
-    #all_models_names = []
-    #all_scores = []
-    #all_std_scores = []
-    #all_mean_scores = []
-    #execution_times = []
- 
-
-    cores_num = multiprocessing.cpu_count() # used by n_jobs
-
-    
-    
-    if use_multiprocess:
-        print('X_pandas class is: ', [base.__name__ for base in X_pandas.__class__.__bases__])
-        with Pool(cores_num) as p:
-            from functools import partial
-            all_results_tuples = p.map(
-                    partial(evaluate_model_using_smote_and_rescaling, 
-                            all_train_and_test_indexes=both_indexes,
-                            X_data = X_pandas,
-                            y_data = y_pandas,
-                            folds = kcv_folds,
-                            smote=use_smote,
-                            rescaling=use_rescaling,
-                            cores_num=cores_num,
-                            maximization=True),
-                    models)
-#        pool = Pool(processes=cores_num)
+#    
+#    models = build_models_list(knn_k_value,lr_solver,lr_multiclass)
+#
+##    if len(models_names) != len(models):
+##        raise ValueError('models_name length ({0}) != models length ({1})'.format(len(models_names),len(models)))
+##        exit(1)
+##    
+#    cores_num = multiprocessing.cpu_count() # used by n_jobs
+#
+#    # Validation setup
+#    cv = model_selection.KFold(n_splits=kcv_folds, random_state=cv_seed, shuffle=cv_shuffle)
+#    both_indexes = cv.split(X_pandas)
+#
+#    # results variables
+#    all_results_tuples = []
+#    #all_models_names = []
+#    #all_scores = []
+#    #all_std_scores = []
+#    #all_mean_scores = []
+#    #execution_times = []
+# 
+#
+#    cores_num = multiprocessing.cpu_count() # used by n_jobs
+#
+#    
+#    
+#    if use_multiprocess:
+#        print('X_pandas class is: ', [base.__name__ for base in X_pandas.__class__.__bases__])
+#        with Pool(cores_num) as p:
+#            from functools import partial
+#            all_results_tuples = p.map(
+#                    partial(evaluate_model_using_smote_and_rescaling, 
+#                            all_train_and_test_indexes=both_indexes,
+#                            X_data = X_pandas,
+#                            y_data = y_pandas,
+#                            folds = kcv_folds,
+#                            smote=use_smote,
+#                            rescaling=use_rescaling,
+#                            cores_num=cores_num,
+#                            maximization=True),
+#                    models)
+##        pool = Pool(processes=cores_num)
+##        for model in models:
+##            print('* Evaluation {0} model...'.format(model[0]))
+##            #arguments = (both_indexes, X_pandas, y_pandas, model, cv, smote=use_smote, rescaling=use_rescaling, cores_num=cores_num)
+##            arguments = (both_indexes, X_pandas, y_pandas, model, cv, use_smote, use_rescaling, cores_num)
+##            result = pool.apply(evaluate_model_using_smote_and_rescaling, arguments)
+##            all_results_tuples.append(result)
+#        
+#        
+#        
+#    else:
 #        for model in models:
 #            print('* Evaluation {0} model...'.format(model[0]))
-#            #arguments = (both_indexes, X_pandas, y_pandas, model, cv, smote=use_smote, rescaling=use_rescaling, cores_num=cores_num)
-#            arguments = (both_indexes, X_pandas, y_pandas, model, cv, use_smote, use_rescaling, cores_num)
-#            result = pool.apply(evaluate_model_using_smote_and_rescaling, arguments)
-#            all_results_tuples.append(result)
-        
-        
-        
-    else:
-        for model in models:
-            print('* Evaluation {0} model...'.format(model[0]))
-            dic_result = evaluate_model_using_smote_and_rescaling(both_indexes, X_pandas, y_pandas,
-                                                              model, kcv_folds, smote=use_smote,
-                                                              rescaling=use_rescaling, cores_num=cores_num)
-            # List of tuples with shape:
-            # (name, mean_acc, std_acc, best_acc, best_cmat, worst_acc, worst_cmat, total_time)
-            all_results_tuples.append(dic_result)
-            
-            
-    return all_results_tuples
+#            dic_result = evaluate_model_using_smote_and_rescaling(both_indexes, X_pandas, y_pandas,
+#                                                              model, kcv_folds, smote=use_smote,
+#                                                              rescaling=use_rescaling, cores_num=cores_num)
+#            # List of tuples with shape:
+#            # (name, mean_acc, std_acc, best_acc, best_cmat, worst_acc, worst_cmat, total_time)
+#            all_results_tuples.append(dic_result)
+#            
+#            
+#    return all_results_tuples
         
     
 
@@ -294,10 +322,11 @@ def evaluate_all(X_pandas, y_pandas, knn_k_value,lr_solver,lr_multiclass,
 def main(argv):
     
     # runtime parameters
-    __TOTAL_RUNNINGS = 1
+    __TOTAL_RUNNINGS = 20
     __MULTIPROCESS = False
     __USE_SAMPLE_DATA_DIR = True # Use this arguments to set the input directory of attributes files
     USE_FIXED_SLICE_GROUPING = True # Seeds test 
+    debug = True
     
     # Models Parameters
     knn_k_value=3
@@ -388,142 +417,150 @@ def main(argv):
     X_pandas = pd.DataFrame(data=X_reshaped)
     y_pandas = pd.DataFrame(data=output_classes)
     
+    
+    # Getting models list
+    models = build_models_list(knn_k_value,lr_solver,lr_multiclass)
+
+    # All results pool
+    all_models_results = []
+    
+    # Initializing pool of results
+    for model in models:
+        model_result = []
+        for metric in all_metrics():
+            model_result.append([])
+        all_models_results.append(model_result)
+        
+    
     all_mean_acc = []
-    #all_std_acc = []
-    #all_max_acc = []
-    #all_min_acc = []
     all_median_acc = []
     all_median_cmat = []
     all_time = []
     
     for n in list(range(__TOTAL_RUNNINGS)):
         ## all_experiments_results is a LIST of LISTS of Dictionaries which have as keys:
-        #all_experiments_results.append(evaluate_all(X_pandas, y_pandas, use_multiprocess=__MULTIPROCESS))
+
+
+############################################################################################
+#        n_experiment_results = evaluate_all(X_pandas, y_pandas,
+#                                            knn_k_value,lr_solver,lr_multiclass,
+#                                            kcv_folds=kcv_folds,
+#                                            use_multiprocess=__MULTIPROCESS)
+############################################################################################
+        cv_seed=7
+        cv_shuffle=True
+        use_multiprocess = __MULTIPROCESS
+        use_smote = True
+        use_rescaling = True
+
+
+        # Getting how many cpus are avaliable
+        cores_num = multiprocessing.cpu_count() # used by n_jobs
+    
+        # Validation setup
+        cv = model_selection.KFold(n_splits=kcv_folds, random_state=cv_seed, shuffle=cv_shuffle)
+        both_indexes = cv.split(X_pandas)
+    
+        # Current Experiment: Results from each model
+        all_results_tuples = []
+
         
-        n_experiment_results = evaluate_all(X_pandas, y_pandas,
-                                            knn_k_value,lr_solver,lr_multiclass,
-                                            kcv_folds=kcv_folds,
-                                            use_multiprocess=__MULTIPROCESS)
-        
-        model_mean_acc = []
-        #model_std_acc = []
-        #model_max_acc = []
-        #model_min_acc = []
-        model_median_acc = []
-        model_median_cmat = []
-        model_time = []
-        
-        for model_results in n_experiment_results:
-            # 'model_results' is a dicionary
+        if use_multiprocess and __name__ == "__main__":
+            with Pool(cores_num) as p:
+                from functools import partial
+                all_results_tuples = p.map(
+                        partial(evaluate_model_using_smote_and_rescaling, 
+                                all_train_and_test_indexes=both_indexes,
+                                X_data = X_pandas,
+                                y_data = y_pandas,
+                                folds = kcv_folds,
+                                smote=use_smote,
+                                rescaling=use_rescaling,
+                                cores_num=cores_num,
+                                maximization=True),
+                        models)
             
-            model_mean_acc.append(model_results['mean_acc'])
-#            model_std_acc.append(model_results['std_acc'])
-#            model_max_acc.append(model_results['best_acc'])
-#            model_min_acc.append(model_results['worst_acc'])
-            model_median_acc.append(model_results['median_acc'])
-            model_median_cmat.append(model_results['median_cmat'])
-            model_time.append(model_results['total_time'])
-            
-            #dic = {'name':name, 'mean_acc':mean_acc, 'std_acc':std_acc, 'best_acc':best_acc, 
-            #'best_cmat':best_cmat, 'worst_acc':worst_acc, 'worst_cmat':worst_cmat, 'total_time':total_time,
-            #'all_acc':np_all_acc, 'all_cmat':all_cmat, 'median_acc':median_acc, 'median_cmat':median_cmat}
-            
-        np_mean_acc = np.array(model_mean_acc)
-        #max_pos = np_mean_acc.argmax()
-        #min_pos = np_mean_acc.argmin()
-        np_time = np.array(model_time)
+        else:
+            for model in models:
+                #print('* Evaluation {0} model...'.format(model[0]))
+                dic_result = evaluate_model_using_smote_and_rescaling(both_indexes, X_pandas, y_pandas,
+                                                                  model, kcv_folds, smote=use_smote,
+                                                                 rescaling=use_rescaling, cores_num=cores_num)
+                
+                if True:
+                    # Results is a List of tuples each with shape:
+                    print('{0:>4}: mean_acc={1:.4f} std_acc={2:.4f} max_acc={3:.4f} max_cmat={4} min_acc={5:.4f} min_cmat={6} median_acc={7} median_cmat={8} total_time={9:.4f}'.format(
+                            dic_result['name'], dic_result['mean_acc'], dic_result['std_acc'], 
+                                       dic_result['best_acc'], ' '.join(map(str, np.array(dic_result['best_cmat']))),
+                                       dic_result['worst_acc'], ' '.join(map(str, np.array(dic_result['worst_cmat']))), 
+                                       dic_result['median_acc'], ' '.join(map(str, np.array(dic_result['median_cmat']))),
+                                       dic_result['total_time']))
+                    #all_acc = dic_result['all_acc']
+                    #print('all_acc=\n{0}'.format(all_acc))
+                
+                all_results_tuples.append(dic_result)
+                
+
+        #print (all_results_tuples['KNN'])
         
-        all_mean_acc.append(np_mean_acc.mean())
-        #all_std_acc.append(np_mean_acc.std())
-        #all_max_acc.append(np_mean_acc[max_pos])
-        #all_min_acc.append(np_mean_acc[min_pos])
-        all_median_acc.append(model_median_acc[len(model_median_acc)//2])
-        all_median_cmat.append(model_median_cmat[len(model_median_cmat)//2])
-        all_time.append(np_time.mean)
-        #all_mean_acc.append(.mean())
-        #all_std_acc.append(np.array(model_mean_acc).std())
-        #all_max_acc.append(model_max_acc[np.array(model_max_acc).argmax()])
-        #all_min_acc.append(np.array(model_min_acc).mean())
-        #all_median_acc.append(model_median_acc)
-        #all_median_cmat.append(model_median_cmat)
-        #all_time.append(model_time)
+########################################################
+        # Compiling result data from this experiment
         
-#    for results_for_only_one_exp in all_experiments_results:
-#            this_model_mean_acc_list = []
-#            this_model_std_acc_list = []
-#            this_model_max_acc_list = []
-#            this_model_min_acc_list = []
-#            this_model_cmat_list = []
-#            this_model_time_list = []
-#            this_model_all_acc_list = []
-#            this_model_all_cmat_list = []
-#            this_model_median_acc_list = []
-#            this_model_median_cmat_list = []
+#        model_mean_acc = []
+#        model_median_acc = []
+#        model_median_cmat = []
+#        model_time = []
 #        
-#        for dic in results_for_only_one_exp:
-#            # dic is the results from only one classifier for one experiment
-#            print('{0}:\tacc={1:.4f} std={2:.4f} total_time={3:.4f}s)'.format(dic['name'], 
-#                 dic['mean_acc'], dic['std_acc'], dic['total_time']))
-#            this_model_mean_acc_list.append(dic['mean_acc'])
-#            this_model_std_acc_list.append(dic['std_acc'])
-#            this_model_max_acc_list.append(dic['best_acc']) 
-#            this_model_min_acc_list.append(dic['worst_acc'])
-#            this_model_cmat_list.append(dic[''])
-#            this_model_time_list.append(dic['total_time'])
-#            this_model_all_acc_list.append(dic['all_acc'])
-#            this_model_all_cmat_list.append(dic['all_cmat'])
-#            this_model_median_acc_list.append(dic['median_acc'])
-#            this_model_median_cmat_list.append(dic['median_cmat'])
-    
-    
-    
-    models = build_models_list()        
-        
-    print('* All {0} experiments results:'.format(__TOTAL_RUNNINGS))
-    for exp in range(__TOTAL_RUNNINGS):
-        name = models[exp][0]
-        print('name=',name)
-        print('all_mean_acc[0].__class__.__name__=',all_mean_acc[0].__class__.__name__)
-        np_all_mean = np.array(all_mean_acc[exp])
-        print(np_all_mean)
-        mean_acc = np_all_mean.mean()
-        std_acc = np_all_mean.std()
-        max_acc = np_all_mean[np_all_mean.argmax()]
-        min_acc = np_all_mean[np_all_mean.argmin()]
-        
-        median_pos = kcv_folds // 2 if kcv_folds % 2 == 1 else None
-        median_acc = all_median_acc[exp][median_pos] if kcv_folds % 2 == 1 else None
-        median_cmat = all_median_cmat[exp][median_pos] if kcv_folds % 2 == 1 else None
-        
-        np_all_time = np.array(all_time[exp])
-        mean_time = np_all_time.mean()
-        
-        print('{0}:\tmean_acc={1:.4f} mean_std={2:.4f} mean_time={3:.4f}s'.format(name, mean_acc, std_acc, mean_time))
-        
-#        print('{0}:\tacc={1:.4f} std={2:.4f} total_time={3:.4f}s)'.format(dic['name'], 
-#                 dic['mean_acc'], dic['std_acc'], dic['total_time']))
-    
-    
-    # (name, mean_acc, std_acc, best_acc, best_cmat, worst_acc, worst_cmat, total_time)
-    
-    #all_acc = np.array(all_acc)
-    
-    #best_model_acc = all_acc.max()
-    #best_acc_pos = all_acc.argmax()
-    #best_acc_cmat = all_cmat[best_acc_pos]
-    #worst_acc_cmat = all_cmat[all_acc.argmin()]
-    
-    #print('\n* Results afer {0} runnings:\n{0}'.format(__TOTAL_RUNNINGS))
-    #print('\ttime to run classifier={0}'.format(total_time))
-    #print('\tclassifier={0}'.format(__CLASSIFIER))
-    #print('\tmean={0}'.format(np.mean(all_acc)))
-    #print('\tvariance={0}'.format(all_acc.var()))
-    #print('\tstd={0}'.format(all_acc.std()))
-    #print('\tmax={0}'.format(best_acc))
-    #print('\tmin={0}'.format(all_acc.min()))
-    #print('\tConfusion matrix of the best result:\n', best_acc_cmat)
-    #print('\tConfusion matrix of the worst result:\n', worst_acc_cmat)
-    #print('all_classifiers_results=\n',all_classifiers_results)
+#        for model_results in n_experiment_results:
+#            # 'model_results' is a dicionary
+#            
+#            model_mean_acc.append(model_results['mean_acc'])
+#            model_median_acc.append(model_results['median_acc'])
+#            model_median_cmat.append(model_results['median_cmat'])
+#            model_time.append(model_results['total_time'])
+#            
+#        np_mean_acc = np.array(model_mean_acc)
+#        np_time = np.array(model_time)
+#        
+#        all_mean_acc.append(np_mean_acc.mean())
+#        all_median_acc.append(model_median_acc[len(model_median_acc)//2])
+#        all_median_cmat.append(model_median_cmat[len(model_median_cmat)//2])
+#        all_time.append(np_time.mean)
+#        
+#    models = build_models_list()        
+#        
+#    # Printing all compliled data
+#    print('* All {0:03d} experiments results:'.format(__TOTAL_RUNNINGS))
+#
+#    
+#
+#    for model in range(len(models)):
+#        name = models[model][0]
+#        print('model {0}:'.format(name),end='')
+##        #print('all_mean_acc[0].__class__.__name__=',all_mean_acc[0].__class__.__name__)
+#        
+#        #np_all_acc_mean = np.array(all_mean_acc[model])
+#        #print(' acc_mean=',np_all_acc_mean,end='')
+#        
+#        print(' acc_median={0}'.format(all_median_acc[model]),end='')
+#        
+#        
+#        print('\n')
+
+#        mean_acc = np_all_mean.mean()
+#        std_acc = np_all_mean.std()
+#        max_acc = np.argmax(np_all_mean)
+#        min_acc = np.argmin(np_all_mean)
+#        
+#        median_pos = kcv_folds // 2 if kcv_folds % 2 == 1 else None
+#        median_acc = all_median_acc[exp][median_pos] if kcv_folds % 2 == 1 else None
+#        median_cmat = (all_median_cmat[exp][median_pos] if kcv_folds % 2 == 1 else None)
+#        
+#        np_all_time = np.array(all_time[exp])
+#        total_time = np_all_time.mean()
+#        
+#        print('{0}:\tmean_acc={1:.4f} mean_std={2:.4f} median_acc={3:.4f} median_cmat={4} max_acc{5:.4f} min_acc={5:.4f} total_time={6:.4f}s'.format(name, mean_acc, std_acc, median_acc, str(median_cmat), max_acc, min_acc, total_time))
+
     return 0
     
     

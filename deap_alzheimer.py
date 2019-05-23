@@ -8,9 +8,22 @@ Created on Thu Nov 29 10:35:46 2018
 @author: rodrigo
 """
 
-#import numpy
+
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.neighbors.classification import KNeighborsClassifier
+from sklearn.ensemble.forest import RandomForestClassifier
+from sklearn.naive_bayes import GaussianNB
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
+from sklearn.linear_model import LogisticRegression
+from sklearn.svm import SVC
+
+from sklearn.model_selection import KFold
+from sklearn.model_selection import train_test_split
+from sklearn import metrics
+
+import numpy as np
 from deap import base, creator, tools, algorithms
-#from random import samplei
+
 import random, sys, os
 import loadattribs 
 import knn_alzheimer_crossvalidate
@@ -20,6 +33,8 @@ import datetime
 import multiprocessing
 from multiprocessing import Pool
 import copy
+
+
 
 
 # Globla Slicing Arguments
@@ -44,27 +59,30 @@ __DEFAULT_MAX_CONSEC_SLICES = 20
 __DEFAULT_NUMBER_OF_GROUPINGS = 1
 
 # Classifier parameters
-__CLASSFIERS = ['knn','naive_bayes']
 __DEFAULT_KNN_K_VALUE = 3
+
 __USE_RESCALING = True
 __USE_SMOTE = True
 __CV_TYPE = 'kcv'
 __CV_MULTI_THREAD_ = False
+__CV_SHUFFLE = True
 __KCV_FOLDS = 10
+__MAXIMIZATION_PROBLEM = True
 
 # Runtime Parameters
 __DEAP_RUN_ID = ''
 __OUTPUT_DIRECTORY = './'
 __MULTI_CPU_USAGE = False
 __VERBOSE = False
+__CORES_NUM = 4
 
 # Default Evolutionary Parameters
 __MUTATE_INDP = 0.15
 __CROSSOVER_INDP = 0.40
-__POPULATION_SIZE = 40
-__NUMBER_OF_GENERATIONS = 12
-__MAX_GENERATIONS_WITHOUT_IMPROVEMENTS = 25
-__TOURNEAMENT_SIZE_IS_DYNAMIC = True
+__POPULATION_SIZE = 200
+__NUMBER_OF_GENERATIONS = 120
+__MAX_GENERATIONS_WITHOUT_IMPROVEMENTS = 20
+__TOURNEAMENT_SIZE_IS_DYNAMIC = False
 __TOURNEAMENT_UPDATE_LIMIT = 10
 __TOURNEAMENT_LAST_UPDATE = 0
 #__TOURNEAMENT_SIZE_INCREMENT_VALUE = int(__POPULATION_SIZE * 0.02)
@@ -80,6 +98,12 @@ __DEFAULT_WORST_FITNESS = -1.0
 __GENES_LOW_LIMITS = [0,0,1]
 __GENES_UP_LIMITS = [2,160,20]
 __SEEDS_FILE = ''
+
+# Alarm Variables
+__ALARM = True
+__DURATION = 1 #seconds
+__FREQ = 440 # Hz
+
 
 def update_tourneament_size(current_gen, last_improvement_gen, toolbox):
     global __TOURNEAMENT_SIZE, __TOURNEAMENT_SIZE_IS_DYNAMIC, __TOURNEAMENT_LAST_UPDATE
@@ -97,16 +121,8 @@ def update_tourneament_size(current_gen, last_improvement_gen, toolbox):
             toolbox.register("select", tools.selTournament, tournsize=__TOURNEAMENT_SIZE) # selection
             if __VERBOSE:
                 print('\t* Generation {1:3d}: New Torneament Size={0:2d}'.format(__TOURNEAMENT_SIZE,current_gen))
+    return __TOURNEAMENT_SIZE
             
-#            if __VERBOSE:
-#                print('\t* Generation {1:3d}: New Torneament Size={0:2d}'.format(__TOURNEAMENT_SIZE,current_gen))
-
-# Alarm Variables
-__ALARM = True
-__DURATION = 1 #seconds
-__FREQ = 440 # Hz
-
-
 
 def getRandomPlane(planes = __BODY_PLANES):
     plane = random.sample(planes,1)[0]
@@ -159,6 +175,206 @@ def initIndividual(planes = __BODY_PLANES,
         
     return data
 
+#####################################################################################
+def get_data_partition(individual, all_attribs, all_slice_amounts, debug=__VERBOSE):
+    all_groupings_partitions_list = []
+    
+    ind_size = len(individual)
+    
+    if ind_size % 3 == 0:    
+        # Getting data from a slices grouping
+        for g in list(range(ind_size)):
+            if g % 3 == 0:
+                plane = individual[g]
+                first_slice = individual[g+1]
+                total_slices = individual[g+2]
+                                
+                partition = loadattribs.getAttribsPartitionFromSingleSlicesGrouping(all_attribs,all_slice_amounts,plane,first_slice,total_slices)
+                
+                # append data to a list which will be merged later
+                all_groupings_partitions_list.append(partition)
+                
+                g = g + 3 # (step to another slice grouping)
+    else:
+        raise ValueError('Bad formatted individual: slices grouping length ({0}) must be a multiple of three.\nIndividual = {1}'.format(ind_size,individual))
+        
+    # Merging all partitions data
+    all_partitions_merged = all_groupings_partitions_list[0] # getting first
+    for i in range(1,len(all_groupings_partitions_list)):
+        all_partitions_merged = all_partitions_merged + all_groupings_partitions_list[i]
+    
+    return all_partitions_merged
+
+def buildDataFrames(X_data, y_data):
+    # Data preparation
+    try:
+        new_dimensions = (X_data.shape[0],
+                          X_data.shape[1]*X_data.shape[2])
+    except IndexError:
+        print('** IndexValue exception')
+        print('\tX_data.shape=',X_data.shape)
+        print('\ty_data.shape=',y_data.shape)
+        print('\t')
+        sys.exit(-1)
+    
+    if __VERBOSE: 
+        print('* Reshaping for this data partition with these dimensions:',new_dimensions)
+    import numpy as np
+    new_partition = np.reshape(X_data, new_dimensions)
+        
+    if __VERBOSE: 
+        print('...done')
+        print('* The shape of a line data retrived from the new partition=', new_partition[0].shape)
+    
+    import pandas as pd
+    X_pandas = pd.DataFrame(data=new_partition)
+    y_pandas = pd.DataFrame(data=y_data)
+    
+    return X_pandas, y_pandas
+
+def evaluateSlicesGrouping(individual, all_attribs, all_slice_amounts,
+                           output_classes, model, debug=__VERBOSE):
+
+    all_partitions_merged = get_data_partition(individual, all_attribs, all_slice_amounts, debug=__VERBOSE)
+    
+    global __USE_RESCALING, __USE_SMOTE, __CV_TYPE, __CV_MULTI_THREAD_, __KCV_FOLDS, __CV_SHUFFLE
+    global __MAXIMIZATION_PROBLEM, __CORES_NUM
+    
+
+    
+    # Formating data as Pandas DataFrame
+    X_pandas, y_pandas = buildDataFrames(all_partitions_merged, output_classes)
+
+    # Preparing cross-validation
+    cv = KFold(n_splits=folds, random_state=42, shuffle=True)
+    all_train_and_test_indexes = cv.split(X_pandas)
+    
+    dicionary_results = evaluate_model(all_train_and_test_indexes, 
+                                       X_pandas, y_pandas , model_tuple,
+                                       __KCV_FOLDS, cv_seed=7, cv_shuffle=__CV_SHUFFLE,
+                                       smote=__USE_SMOTE, rescaling=__USE_RESCALING, cores_num=1, 
+                                       maximization=__MAXIMIZATION_PROBLEM, debug=__VERBOSE)
+    accuracy = dicionary_results['median_acc']
+    conf_matrix = dicionary_results['median_cmat']
+    
+    return accuracy, conf_matrix
+
+
+def evaluate_model(all_train_and_test_indexes, 
+                   X_data, y_data, model_tuple,
+                   folds, cv_seed=7, cv_shuffle=True,
+                   smote=True, rescaling=True, cores_num=1, 
+                   maximization=True, debug=False):
+    
+    all_acc = []
+    all_cmat = []
+    
+    start_time = time.time()
+    
+    # STEP 1: perform rescaling if required
+    if rescaling:
+        
+        from sklearn import preprocessing
+        scaler = preprocessing.StandardScaler()
+        X_fixed = scaler.fit_transform(X_data) # Fit your data on the scaler object
+    else:
+        X_fixed = X_data
+        
+    # Added to solve column-vector issue
+    import numpy as np
+    y_fixed = np.ravel(y_data)
+     
+    # Validation setup
+
+    from sklearn import model_selection 
+    cv = model_selection.KFold(n_splits=folds, random_state=cv_seed, shuffle=cv_shuffle)
+    both_indexes = cv.split(X_data)
+    #both_indexes = all_train_and_test_indexes
+    
+    #for train_indexes, test_indexes in all_train_and_test_indexes:
+    for train_indexes, test_indexes in both_indexes:
+        
+        # STEP 2: split data between test and train sets
+        X_train = X_fixed[train_indexes]
+        X_test = X_fixed[test_indexes]
+        y_train = y_fixed[train_indexes]
+        y_test = y_fixed[test_indexes]
+        
+        # STEP 3: oversampling training data using SMOTE if required
+        if smote:
+            from imblearn.over_sampling import SMOTE
+            smt = SMOTE() 
+            X_train, y_train = smt.fit_sample(X_train, y_train)
+    
+        name = model_tuple[0] # model name (string)
+        model = model_tuple[1] # model class (implements fit method)
+        
+        # STEP 4: Training (Fit) Model
+        model.fit(X_train, y_train)
+        
+        # STEP 5: Testing Model (Making Predictions)
+        y_pred = model.predict(X_test) # testing
+        
+        # STEP 6: Building Evaluation Metrics
+        acc = metrics.accuracy_score(y_test, y_pred)
+        cmat = metrics.confusion_matrix(y_test,y_pred,labels=None,sample_weight=None)
+#        print('acc={0:.4}'.format(acc))
+        all_acc.append(acc)
+        all_cmat.append(cmat)
+        #cv_results = model_selection.cross_val_score(model, X_data, y_data, cv=kfold, scoring=metric, n_jobs=cores_num)
+    	
+    # Converting to Numpy Array to use its statiscs pre-built functions
+    np_all_acc = np.array(all_acc)
+#    print('length of all_acc={0} and np_all_acc={1}'.format(len(all_acc),len(np_all_acc)))
+    
+    # Finding position of the best and the worst individual
+    best_acc_pos  = np.argmax(np_all_acc) if maximization else np.argmin(np_all_acc)
+    worst_acc_pos = np.argmin(np_all_acc) if maximization else np.argmax(np_all_acc)
+    median_pos = folds//2
+    
+    best_acc = np_all_acc[best_acc_pos]
+    best_cmat = all_cmat[best_acc_pos]
+    worst_acc = all_acc[worst_acc_pos]
+    worst_cmat = all_cmat[worst_acc_pos]
+    
+    mean_acc = np_all_acc.mean()
+    
+    median_acc = np_all_acc[median_pos] #np_all_acc[folds//2] if folds % 2 == 1 else (np_all_acc[(folds+1)//2] + np_all_acc[(folds-1)//2])//2
+    median_cmat = all_cmat[median_pos]
+    
+    std_acc = np_all_acc.std()
+    
+    # Calculing execution time
+    end_time = time.time()
+    total_time = end_time - start_time
+    
+    #dic = {'name':name, 'mean_acc':mean_acc, 'std_acc':std_acc, 'best_acc':best_acc, 
+    #'best_cmat':best_cmat, 'worst_acc':worst_acc, 'worst_cmat':worst_cmat, 'total_time':total_time, 'all_acc':np_all_acc, 'all_cmat':all_cmat, 'median_acc':median_acc, 'median_cmat':median_cmat}
+    
+    metrics_list = [name,mean_acc,best_acc,std_acc,best_cmat,worst_acc,worst_cmat,total_time,all_acc,all_cmat,median_acc,median_cmat]
+
+    metrics_names = all_metrics()
+    dic = {}
+    for metric_num in range(len(metrics_names)):
+        name = metrics_names[metric_num]
+        dic[name] = metrics_list[metric_num]
+        
+#    dic['name'] = name
+#    dic['mean_acc'] = mean_acc
+#    dic['std_acc'] = std_acc
+#    dic['best_acc'] = best_acc
+#    dic['best_cmat'] = best_cmat
+#    dic['worst_acc'] = worst_acc
+#    dic['worst_cmat'] = worst_cmat
+#    dic['total_time'] = total_time
+#    dic['all_acc'] = all_acc
+#    dic['all_cmat'] = all_cmat
+#    dic['median_acc'] = median_acc
+#    dic['median_cmat'] = median_cmat
+    
+    return dic    
+#####################################################################################
+
 # Evaluates a individual instance represented by Slices Groupings 
 def evaluateSlicesGroupingsKNN(individual, # list of integers
                                all_attribs,
@@ -198,7 +414,7 @@ def evaluateSlicesGroupingsKNN(individual, # list of integers
     global __USE_RESCALING, __USE_SMOTE, __CV_TYPE, __CV_MULTI_THREAD_, __KCV_FOLDS
     
     # Classifying merged data
-    accuracy, conf_matrix = knn_alzheimer_crossvalidate.runKNN(
+    accuracy, conf_matrix = knn_alzheimer_crossvalidate.runSVM(
             all_partitions_merged,
             output_classes,
             k_value,
