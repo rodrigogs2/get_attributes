@@ -89,9 +89,9 @@ def load_attribs_and_metadata(attributes_file):
     
     return  attribs, body_plane, slice_numbers, slice_amount
 
-def build_classes_dictionary(csv_file):
+def build_cvs_dictionary(csv_file):
     alzheimer_dic = {'CN': 0, 'MCI': 1, 'AD': 2}
-    dic = {}
+    demographics_dictionary = {}
 
     if os.path.exists(csv_file):
         try:
@@ -101,50 +101,65 @@ def build_classes_dictionary(csv_file):
                 headers = next(reader) 
                 for row in reader:
                     image_id = 'I' + row[3]
+                    gender = row[6]
+                    age = row[7]
                     image_class = alzheimer_dic[row[5]]
-                    dic[image_id] = image_class
+                    dic = {'class':image_class, 'gender':gender, 'age':age}
+                    demographics_dictionary[image_id] = dic
         except os.error:
             print("*** ERROR: The csv file %s can not be readed (os.error in build_classes_dictionary)" % csv_file)    
 
     else:
         message = str("file %s does not exist!" % csv_file)
         raise ValueError(message)
-    return dic
+    return demographics_dictionary
 
-def get_class(attributes_file, all_classes_dictionary):
-    image_id = re.findall(r'I[0-9]+',attributes_file)
-    image_class = None
+def get_demographic_data(attributes_filename, demographics_dictionary):
+    image_id = re.findall(r'I[0-9]+',attributes_filename)
     
     if len(image_id) > 0:
-        image_class = all_classes_dictionary[image_id[0]]
-    return image_class
+        subject_class_gender_sex = demographics_dictionary[image_id[0]]
+    else:
+        raise ValueError('There aren\'t image IDs in this attributes filename ({0})'.format(attributes_filename))
 
+    return subject_class_gender_sex
 
+                    
 def load_all_data(attributes_dir, csv_file):
     all_attribs = []
     all_body_planes = []
     all_slice_num = []
     all_slice_amounts = []
     all_classes = []
+    all_genders = []
+    all_ages = []
     
-    dic = build_classes_dictionary(csv_file)
+    image_id_dictionary  = build_cvs_dictionary(csv_file)
     
     # Getting all attributes files from attributes directory
     attribs_files = list_dir.list_files(attributes_dir,".txt")
     
-    # Loop which loads attributes, classes values and slicing info
+    # Loop which loads attributes, demographics values and slicing info
     for file in attribs_files:
         attribs,body_plane,slice_num,slice_amounts = load_attribs_and_metadata(file)
         all_attribs.append(attribs)
         all_body_planes.append(body_plane)
         all_slice_num.append(slice_num)
         all_slice_amounts.append(slice_amounts)  
-        image_class = get_class(file,dic)
+        
+        demographics_data = get_demographic_data(file,image_id_dictionary)
+        
+        image_class = demographics_data['class']
+        gender = demographics_data['gender']
+        age = demographics_data['age']
         all_classes.append(image_class)
+        all_genders.append(gender)
+        all_ages.append(age)
         
     array_all_classes = np.array(all_classes, dtype=np.int64)
+    array_all_ages = np.array(all_ages, dtype=np.int64)
     
-    return all_attribs, all_body_planes, all_slice_num, all_slice_amounts, array_all_classes
+    return all_attribs, all_body_planes, all_slice_num, all_slice_amounts, array_all_classes, all_genders, array_all_ages, image_id_dictionary
 
     # getting partition from 80 to 100th slice from the f-th (f=0) attribs file
     #partition = get_attributes_from_a_range_of_slices(attribs,slice_amounts,p,fs,ls)
@@ -267,12 +282,6 @@ def getAttribsPartitionFromSingleSlicesGrouping(all_attribs,
                                                                        initial_slice_num,
                                                                        total_slices))
     
-#    plane0_start = 0
-#    plane0_end = slice_amounts[0]
-#    plane1_start = slice_amounts[0]
-#    plane1_end = plane1_start + slice_amounts[1]
-#    plane2_start = plane1_end
-#    plane2_end = plane2_start + slice_amounts[2]
     
     return np.array(attribs_partition, dtype=np.float64)
 
@@ -306,17 +315,32 @@ def main(argv):
     ## Testting area
     
     # Use this arguments to set the input directory of attributes files
-    attributes_dir = "/home/rodrigo/Downloads/fake_output_dir2/"
+    attributes_dir = "/home/rodrigo/Documents/_phd/attributes_amostra/"
     csv_file = '/home/rodrigo/Documents/_phd/csv_files/ADNI1_Complete_All_Yr_3T.csv' 
     # Getting all files
     
     print('* Loading all attributes data...')
-    all_attribs, body_planes, slice_num, slice_amounts, output_classes = load_all_data(attributes_dir, csv_file)
+    all_attribs, body_planes, slice_num, slice_amounts, output_classes, all_genders, all_ages, demographics_dic = load_all_data(attributes_dir, csv_file)
     print('* ...done')
+    
+    print('len(all_attribs)=',len(all_attribs))
+    print('body_planes=',len(body_planes))
+    print('len(slice_num)=',len(slice_num))
+    print('len(output_classes)=',len(output_classes))
+    print('len(all_genders)=',len(all_genders))
+    print('len(all_ages)',len(all_ages))
+    
+    print('all_attribs[0].shape=', all_attribs[0].shape)
+    print('body_planes[0].shape=', body_planes[0].shape)
+    print('slice_num[0]=', slice_num[0])
+    print('output_classes[0]=', output_classes[0])
+    print('all_genders[0]=', all_genders[0])
+    print('all_ages[0]=', all_ages[0])
+    #print('demographics_dic=',demographics_dic)
     
     bplane = 2
     start_slice = 123
-    total_slices = 25
+    total_slices = 5
     
     print('\n* Testing function to extract a range of slices from a attributes row...')
     croped_attribs = get_attributes_from_a_range_of_slices(all_attribs[0], 
