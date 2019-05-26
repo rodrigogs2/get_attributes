@@ -27,6 +27,7 @@ from deap import base, creator, tools, algorithms
 import random, sys, os
 import loadattribs 
 import knn_alzheimer_crossvalidate
+import evaluating_classifiers as ec
 import getopt
 import time
 import datetime
@@ -34,7 +35,8 @@ import multiprocessing
 from multiprocessing import Pool
 import copy
 
-
+import matplotlib
+import matplotlib.pyplot as plt
 
 
 # Globla Slicing Arguments
@@ -59,12 +61,31 @@ __DEFAULT_MAX_CONSEC_SLICES = 20
 __DEFAULT_NUMBER_OF_GROUPINGS = 1
 
 # Classifier parameters
+__MODEL_NAME = 'RF'
+
 __DEFAULT_KNN_K_VALUE = 3
+__DEFAULT_LR_SOLVER = 'sag'
+__DEFAULT_LR_MULTICLASS = 'ovr'
+
+__MODELS = ec.build_models_dictionary(
+        knn_k_value=-__DEFAULT_KNN_K_VALUE,
+        lr_solver=__DEFAULT_LR_SOLVER,
+        lr_multiclass=__DEFAULT_LR_MULTICLASS)
+#    models = []
+#    models.append(('KNN', KNeighborsClassifier(n_neighbors=knn_k_value)))
+#    models.append(('LDA', LinearDiscriminantAnalysis()))
+#    models.append(('CART', DecisionTreeClassifier()))
+#    models.append(('NB', GaussianNB()))
+#    models.append(('SVM', SVC()))
+#    models.append(('RF',RandomForestClassifier()))
+#    models.append(('LR', LogisticRegression(solver=lr_solver, multi_class=lr_multiclass)))
+__MODEL_CONSTRUCTOR = __MODELS[__MODEL_NAME]
+
 
 __USE_RESCALING = True
 __USE_SMOTE = True
 __CV_TYPE = 'kcv'
-__CV_MULTI_THREAD_ = False
+__CV_MULTI_THREAD = False
 __CV_SHUFFLE = True
 __KCV_FOLDS = 10
 __MAXIMIZATION_PROBLEM = True
@@ -219,7 +240,7 @@ def buildDataFrames(X_data, y_data):
     
     if __VERBOSE: 
         print('* Reshaping for this data partition with these dimensions:',new_dimensions)
-    import numpy as np
+
     new_partition = np.reshape(X_data, new_dimensions)
         
     if __VERBOSE: 
@@ -237,10 +258,11 @@ def evaluateSlicesGrouping(individual, all_attribs, all_slice_amounts,
 
     all_partitions_merged = get_data_partition(individual, all_attribs, all_slice_amounts, debug=__VERBOSE)
     
-    global __USE_RESCALING, __USE_SMOTE, __CV_TYPE, __CV_MULTI_THREAD_, __KCV_FOLDS, __CV_SHUFFLE
+    global __USE_RESCALING, __USE_SMOTE, __CV_TYPE, __CV_MULTI_THREAD, __KCV_FOLDS, __CV_SHUFFLE
     global __MAXIMIZATION_PROBLEM, __CORES_NUM
     
-
+    folds = __KCV_FOLDS
+    
     
     # Formating data as Pandas DataFrame
     X_pandas, y_pandas = buildDataFrames(all_partitions_merged, output_classes)
@@ -250,7 +272,7 @@ def evaluateSlicesGrouping(individual, all_attribs, all_slice_amounts,
     all_train_and_test_indexes = cv.split(X_pandas)
     
     dicionary_results = evaluate_model(all_train_and_test_indexes, 
-                                       X_pandas, y_pandas , model_tuple,
+                                       X_pandas, y_pandas , model,
                                        __KCV_FOLDS, cv_seed=7, cv_shuffle=__CV_SHUFFLE,
                                        smote=__USE_SMOTE, rescaling=__USE_RESCALING, cores_num=1, 
                                        maximization=__MAXIMIZATION_PROBLEM, debug=__VERBOSE)
@@ -281,7 +303,6 @@ def evaluate_model(all_train_and_test_indexes,
         X_fixed = X_data
         
     # Added to solve column-vector issue
-    import numpy as np
     y_fixed = np.ravel(y_data)
      
     # Validation setup
@@ -353,7 +374,7 @@ def evaluate_model(all_train_and_test_indexes,
     
     metrics_list = [name,mean_acc,best_acc,std_acc,best_cmat,worst_acc,worst_cmat,total_time,all_acc,all_cmat,median_acc,median_cmat]
 
-    metrics_names = all_metrics()
+    metrics_names = ec.all_metrics()
     dic = {}
     for metric_num in range(len(metrics_names)):
         name = metrics_names[metric_num]
@@ -411,10 +432,10 @@ def evaluateSlicesGroupingsKNN(individual, # list of integers
         all_partitions_merged = all_partitions_merged + all_groupings_partitions_list[i]
     
     
-    global __USE_RESCALING, __USE_SMOTE, __CV_TYPE, __CV_MULTI_THREAD_, __KCV_FOLDS
+    global __USE_RESCALING, __USE_SMOTE, __CV_TYPE, __CV_MULTI_THREAD, __KCV_FOLDS, __MODEL_CONSTRUCTOR
     
     # Classifying merged data
-    accuracy, conf_matrix = knn_alzheimer_crossvalidate.runSVM(
+    accuracy, conf_matrix = knn_alzheimer_crossvalidate.runMODEL(
             all_partitions_merged,
             output_classes,
             k_value,
@@ -423,7 +444,8 @@ def evaluateSlicesGroupingsKNN(individual, # list of integers
             use_rescaling=__USE_RESCALING,
             cv_type=__CV_TYPE,
             kcv_value=__KCV_FOLDS,
-            use_Pool=__CV_MULTI_THREAD_)
+            use_Pool=__CV_MULTI_THREAD,
+            model=__MODEL_CONSTRUCTOR)
     
     
     return accuracy, conf_matrix
@@ -467,55 +489,68 @@ def updateGeneBounds(bplanes,
     __GENES_LOW_LIMITS = all_low_limits
     __GENES_UP_LIMITS = all_up_limits
     
-    
-    #if dbug:
-    #print('updating genes Limits...')
-    #print('__GENES_LOW_LIMITS: ',__GENES_LOW_LIMITS)
-    #print('__GENES_UP_LIMITS: ',__GENES_UP_LIMITS)
 
 
 def build_parameters_string(max_consecutive_slices,number_of_groupings):
     strPool = []
 
-    #strPool.append('* Running deap with:\n')
+    # MODEL CHOOSE
+    global __MODEL_NAME,__MODEL_CONSTRUCTOR
+    strPool.append('\n# Model Selection parameters\n')
+    strPool.append('__MODEL_NAME = {0}\n'.format(__MODEL_NAME))
+    strPool.append('__MODEL_CONSTRUCTOR = {0}\n'.format(__MODEL_CONSTRUCTOR))
     
-    global __DEAP_RUN_ID
+    # Runtime parameters    
+    global __DEAP_RUN_ID, __MULTI_CPU_USAGE, __OUTPUT_DIRECTORY, __VERBOSE, __CORES_NUM
+    strPool.append('\n# Runtime parameters\n')
     strPool.append(' __DEAP_RUN_ID ={0}\n'.format(__DEAP_RUN_ID))
+    strPool.append(' __MULTI_CPU_USAGE  ={0}\n'.format(__MULTI_CPU_USAGE ))
+    strPool.append(' __OUTPUT_DIRECTORY ={0}\n'.format(__OUTPUT_DIRECTORY))
+    strPool.append('__VERBOSE = {0}\n'.format(__VERBOSE ))
+    strPool.append('__CORES_NUM = {0}\n'.format(__CORES_NUM ))
     
     # Classifier parameters
-    global __DEFAULT_KNN_K_VALUE
+    global __USE_RESCALING, __USE_SMOTE, __CV_TYPE, __CV_MULTI_THREAD, __CV_SHUFFLE
+    global __KCV_FOLDS, __MAXIMIZATION_PROBLEM, __DEFAULT_KNN_K_VALUE
+    strPool.append('\n# Classifier parameters\n')
+    strPool.append('__USE_RESCALING = {0}\n'.format(__DEAP_RUN_ID))
+    strPool.append('__USE_SMOTE = {0}\n'.format(__DEAP_RUN_ID))
+    strPool.append('__CV_TYPE = {0}\n'.format(__DEAP_RUN_ID))
+    strPool.append('__CV_MULTI_THREAD = {0}\n'.format(__DEAP_RUN_ID))
+    strPool.append('__CV_SHUFFLE = {0}\n'.format(__DEAP_RUN_ID))
+    strPool.append('__KCV_FOLDS = {0}\n'.format(__DEAP_RUN_ID))
+    strPool.append('__MAXIMIZATION_PROBLEM = {0}\n'.format(__DEAP_RUN_ID))
     strPool.append(' __DEFAULT_KNN_K_VALUE ={0}\n'.format(__DEFAULT_KNN_K_VALUE))
 
     # Slicing parameters
     global __BODY_PLANES, __MAX_SLICES_VALUES, __MIN_SLICES_VALUES, __DEFAULT_MAX_CONSEC_SLICES
-    strPool.append(' max_consecutive_slices={0}\n'.format(max_consecutive_slices))
-    strPool.append(' number_of_groupings={0}\n'.format(number_of_groupings))
-    strPool.append(' __BODY_PLANES={0}\n'.format(__BODY_PLANES))
-    strPool.append(' __MAX_SLICES_VALUES={0}\n'.format(__MAX_SLICES_VALUES))
-    strPool.append(' __MIN_SLICES_VALUES={0}\n'.format(__MIN_SLICES_VALUES))
-    strPool.append(' __DEFAULT_MAX_CONSEC_SLICES={0}\n'.format(__DEFAULT_MAX_CONSEC_SLICES))
+    strPool.append('\n# Slicing parameters\n')
+    strPool.append(' max_consecutive_slices = {0}\n'.format(max_consecutive_slices))
+    strPool.append(' number_of_groupings = {0}\n'.format(number_of_groupings))
+    strPool.append(' __BODY_PLANES = {0}\n'.format(__BODY_PLANES))
+    strPool.append(' __MAX_SLICES_VALUES = {0}\n'.format(__MAX_SLICES_VALUES))
+    strPool.append(' __MIN_SLICES_VALUES = {0}\n'.format(__MIN_SLICES_VALUES))
+    #strPool.append(' __DEFAULT_MAX_CONSEC_SLICES={0}\n'.format(__DEFAULT_MAX_CONSEC_SLICES))
     
     
     # Evolutionary arguments
     global __TOURNEAMENT_SIZE, __MUTATE_INDP, __CROSSOVER_INDP, __POPULATION_SIZE, __NUMBER_OF_GENERATIONS 
     global __MAX_GENERATIONS_WITHOUT_IMPROVEMENTS, __DEFAULT_TARGET_FITNESS, __DEFAULT_WORST_FITNESS
-    global  __GENES_LOW_LIMITS, __GENES_UP_LIMITS
-    strPool.append(' __TOURNEAMENT_SIZE ={0}\n'.format(__TOURNEAMENT_SIZE))
-    strPool.append(' __MUTATE_INDP ={0}\n'.format(__MUTATE_INDP))
-    strPool.append(' __CROSSOVER_INDP ={0}\n'.format(__CROSSOVER_INDP ))
-    strPool.append(' __POPULATION_SIZE ={0}\n'.format(__POPULATION_SIZE ))
-    strPool.append(' __NUMBER_OF_GENERATIONS ={0}\n'.format(__NUMBER_OF_GENERATIONS))
-    strPool.append(' __MAX_GENERATIONS_WITHOUT_IMPROVEMENTS  ={0}\n'.format(__MAX_GENERATIONS_WITHOUT_IMPROVEMENTS ))
-    strPool.append(' __DEFAULT_TARGET_FITNESS ={0}\n'.format(__DEFAULT_TARGET_FITNESS))
-    strPool.append(' __DEFAULT_WORST_FITNESS ={0}\n'.format(__DEFAULT_WORST_FITNESS))
-    strPool.append(' __GENES_LOW_LIMITS ={0}\n'.format(__GENES_LOW_LIMITS))
-    strPool.append(' __GENES_UP_LIMITS ={0}\n'.format(__GENES_UP_LIMITS))
+    global  __GENES_LOW_LIMITS, __GENES_UP_LIMITS, __TOURNEAMENT_SIZE_IS_DYNAMIC
+    strPool.append('\n# Evolutonary parameters\n')
+    strPool.append(' __TOURNEAMENT_SIZE_IS_DYNAMIC = {0}\n'.format(__TOURNEAMENT_SIZE_IS_DYNAMIC))
+    strPool.append(' __TOURNEAMENT_SIZE = {0}\n'.format(__TOURNEAMENT_SIZE))
+    strPool.append(' __MUTATE_INDP = {0}\n'.format(__MUTATE_INDP))
+    strPool.append(' __CROSSOVER_INDP = {0}\n'.format(__CROSSOVER_INDP ))
+    strPool.append(' __POPULATION_SIZE = {0}\n'.format(__POPULATION_SIZE ))
+    strPool.append(' __NUMBER_OF_GENERATIONS = {0}\n'.format(__NUMBER_OF_GENERATIONS))
+    strPool.append(' __MAX_GENERATIONS_WITHOUT_IMPROVEMENTS = {0}\n'.format(__MAX_GENERATIONS_WITHOUT_IMPROVEMENTS ))
+    strPool.append(' __DEFAULT_TARGET_FITNESS = {0}\n'.format(__DEFAULT_TARGET_FITNESS))
+    strPool.append(' __DEFAULT_WORST_FITNESS = {0}\n'.format(__DEFAULT_WORST_FITNESS))
+    strPool.append(' __GENES_LOW_LIMITS = {0}\n'.format(__GENES_LOW_LIMITS))
+    strPool.append(' __GENES_UP_LIMITS = {0}\n'.format(__GENES_UP_LIMITS))
 
-    # Runtime parameters
-    global __MULTI_CPU_USAGE, __OUTPUT_DIRECTORY
-    strPool.append(' __MULTI_CPU_USAGE  ={0}\n'.format(__MULTI_CPU_USAGE ))
-    strPool.append(' __OUTPUT_DIRECTORY ={0}\n'.format(__OUTPUT_DIRECTORY))
-    
+
     return strPool
     
 
@@ -569,16 +604,98 @@ def saveParametersFile(max_consec_slices,num_groupings):
         exit(1)
     
     return param_full_filename
+
+
+def save_final_result_boxplot(best_inds,labels,title='Title',debug=__VERBOSE,bckp=None):
+    best_fits = []
+    for ind in best_inds:
+        best_fits.append(ind.fitness.values[0])
+    
+    #best_fits = bckp
+    
+    global __MODEL_NAME, __DEAP_RUN_ID
+    fig,ax = plt.subplots()
+    plt.title(title)
+    ax.boxplot(best_fits,labels=labels)
+    
+    best_of_bests_position = np.argmax(np.array(best_fits))
+    best_of_bests = best_fits[best_of_bests_position]
+    img_filename = 'final_result-acc_{0}-model_{1}-run_{2}.png'.format(best_of_bests, __MODEL_NAME,__DEAP_RUN_ID)
+    
+    output_dir_path = build_experiments_output_dir_name()
+    
+    
+    img_full_filename = os.path.join(output_dir_path, img_filename)
+    if __VERBOSE: 
+        print('\n* Saving final result as bloxplot imagem in: {0}'.format(img_full_filename))
+    
+    fig.savefig(img_full_filename)
+
+
+
+def saveResultsFile(all_experiments_best_ind):
+    global __OUTPUT_DIRECTORY, __DEAP_RUN_ID
+    #output_dir_path = os.path.join(__OUTPUT_DIRECTORY, build_experiments_output_dir_name())
+    output_dir_path = build_experiments_output_dir_name()
+    
+    
+    filename = 'results_{0}_{1}.txt'.format(__DEAP_RUN_ID, __MODEL_NAME)
+    results_full_filename = os.path.join(output_dir_path, filename)
+    
+    append_mode = "a"
+    blank_file = False
+    
+    # checking parameters file
+    if not os.path.exists(results_full_filename):
+        blank_file = True
+        #param_file_dir,param_filename = os.path.split(param_full_filename)
+        
+        # creates output dir when path doesnt exist
+        if output_dir_path != '' and not os.path.exists(output_dir_path):
+            try:
+                os.makedirs(output_dir_path)
+            except os.error:
+                print ('*** ERROR: Output directory (%s) can not be created\n' % output_dir_path)
+                sys.exit(1)
+        
+    # Writting to output file
+    try :
+        
+        file_handler = open(param_full_filename, append_mode)
+        
+        if blank_file:
+            head = 'Experiment, Best_Individual, Best_Fit, Best_ConfMatrix'
+            file_handler.write(head)
+        
+        all_best_fit = []
+        for exp_num in range(1, len(all_experiments_best_ind)+1):
+            ind = all_experiments_best_ind[exp_num-1]
+            best_fit = ind.fitness.values[0]
+            line = '{0},{1},{2},{3}'.format(exp_num, ind, ind.fitness.values[0], ind.conf_matrix)
+            file_handler.write(line)
+            
+            all_best_fit.append(best_fit)
+        file_handler.close()
+        
+        
+            
+    except os.error:
+        print("\n*** ERROR: file %s can not be written" % results_full_filename)
+        exit(1)
+    
+    return param_full_filename
+
+
     
     
 
 def build_experiments_output_dir_name():
     
-    global __OUTPUT_DIRECTORY, _DEAP_RUN_ID
+    global __OUTPUT_DIRECTORY, _DEAP_RUN_ID, __MODEL_NAME
     global __DEFAULT_MAX_CONSEC_SLICES, __DEFAULT_KNN_K_VALUE
     global __MUTATE_INDP, __CROSSOVER_INDP, __POPULATION_SIZE
     
-    run_str = 'run_{0}'.format(__DEAP_RUN_ID)
+    run_str = 'run_{0}_{1}'.format(__DEAP_RUN_ID, __MODEL_NAME)
     slash = '/'
     
     parent_dir = __OUTPUT_DIRECTORY # usually './' or '../'
@@ -686,6 +803,8 @@ def run_deap(all_attribs,
     global __MULTI_CPU_USAGE
     global __VERBOSE
     global __OUTPUT_DIRECTORY
+    global __MODEL_NAME
+    global __MODEL_CONSTRUCTOR
     
     # Slicing global Variables
     global __BODY_PLANES
@@ -780,7 +899,7 @@ def run_deap(all_attribs,
             
        
     if __VERBOSE:
-        print('\n* Experiment {0:3d}: first best individual={0} with fitness={1}'.format(current_experiment, best_ind, best_ind.fitness.values[0]))
+        print('\n* Experiment {0:03d}: first best individual={1} with fitness={2:.6f}'.format(current_experiment, best_ind, best_ind.fitness.values[0]))
     
     toolbox.register("mate", tools.cxUniform, indpb=__CROSSOVER_INDP) # crossing
     toolbox.register("mutate", tools.mutUniformInt, low=__GENES_LOW_LIMITS, up=__GENES_UP_LIMITS, indpb=__MUTATE_INDP) # mutation
@@ -848,32 +967,27 @@ def run_deap(all_attribs,
     generations = list(range(1,number_of_generations + 1))
 
     for current_generation in generations:
-        
+
+        print('\n* Experiment {0:3d},generation={1:3}: Current best_ind={2} best_acc= {3:.6f}'.format(current_experiment,current_generation,best_ind,best_ind.fitness.values[0]))        
+
         if __VERBOSE:
-            print('\n* Experiment {0:3d}: Initializing {1:3}th generation (current best_ind={2}  ({3:.6f})'.format(current_experiment,current_generation,best_ind,best_ind.fitness.values[0]))
-            print('\tCurrent BEST Individual {0} (fitness = {1:.6f}_'.format(best_ind, best_ind.fitness.values[0]))
             print('\t* Running variation operators...',end='')
-        
+
         offspring = algorithms.varAnd(pop, 
                                           toolbox, 
                                       __CROSSOVER_INDP, 
                                       __MUTATE_INDP)
-        if __VERBOSE:
-            print('\t Done!')
-            print('\t* Evaluating offspring...',end='')
+        if __VERBOSE: print('\t Done!')
+
+        print('\t* Evaluating offspring...',end='')
         fits_and_matrices = list(map(toolbox.evaluate,offspring)) # list of (fitness,conf_matrix) tuples
-        if __VERBOSE:
-            print('\t Done!')
+        if __VERBOSE: print('\t Done!')
             
-            
-        if __VERBOSE:
-            print('\t* Updating fitness and confusion matrix of offspring...',end='')
-        
+        if __VERBOSE: print('\t* Updating fitness and confusion matrix of offspring...',end='')
         for i in list(range(len(offspring))):
             # fitness should be a one element tuple
             offspring[i].fitness.values = fits_and_matrices[i][0], # updating offspring fitness
             offspring[i].confusion_matrix = fits_and_matrices[i][1] # second tuple element
-            
         
         best_offspring = None
         
@@ -933,6 +1047,8 @@ def run_deap(all_attribs,
         print('\t* Confusion Matrix:\n', best_ind.confusion_matrix)
     
     print('* Experiment {0:03d} is finished'.format(current_experiment))
+    
+    return best_ind #, best_ind.fitness.values[0], best_ind.confusion_matrix
 
 
 
@@ -1007,8 +1123,9 @@ def main(argv):
     if csv_file_ok and attribs_dir_ok:
             
         print('* Loading data...')
-        print ('\t* Attribs directory is: {0}'.format(attribs_dir))
-        print ('\t* Input CSV file is: {0}'.format(csv_file))
+        print('\t* Attribs directory is: {0}'.format(attribs_dir))
+        print('\t* Input CSV file is: {0}'.format(csv_file))
+        print('\t* Model: {0}'.format(__MODEL_NAME))
 
         if out_dir_ok:
             global __OUTPUT_DIRECTORY
@@ -1050,11 +1167,16 @@ def main(argv):
         all_experiments = list(range(1,number_of_experiments + 1))
         print('Running experiments...')
         
+        all_experiments_best_ind = []
+        
         if __MULTI_CPU_USAGE and __name__ == "__main__":
+
             cores_num = multiprocessing.cpu_count()
+            if __VERBOSE: print('* Running Experiments using Multicore option')
+            
             with Pool(cores_num) as p:
                 from functools import partial
-                p.map( 
+                all_experiments_best_ind = map(
                     partial(run_deap,
                             all_attribs,
                             all_slice_amounts,
@@ -1065,15 +1187,21 @@ def main(argv):
         else:
             for experiment in all_experiments:
                 
-                run_deap(all_attribs,
+                exp_ind = run_deap(all_attribs,
                          all_slice_amounts,
                          all_output_classes,
                          max_consecutive_slices, # length of slices range
                          number_of_groupings,
                          experiment) # controls how many slices ranges there will be used
+                all_experiments_best_ind.append(exp_ind)
 
         if __ALARM:
             os.system('play -nq -t alsa synth {} sine {}'.format(__DURATION, __FREQ))
+        
+        save_final_result_boxplot(all_experiments_best_ind,[__MODEL_NAME])
+        
+            
+        
     else:
         display_help()
     
