@@ -68,6 +68,8 @@ from sklearn import model_selection
 from sklearn import preprocessing
 #from sklearn.model_selection import KFold
 #from sklearn.model_selection import train_test_split
+#from sklearn.model_selection import StratifiedKFold
+
 from sklearn import metrics
 
 # Oversampling
@@ -92,18 +94,76 @@ def get_boxplot(results,labels): # boxplot algorithm comparison
     ax.set_xticklabels(labels)
     plt.show()
 
-def build_models_list(knn_k_value=3,lr_solver='sag',lr_multiclass='ovr'):
-    models = []
-    models.append(('KNN', KNeighborsClassifier(n_neighbors=knn_k_value)))
-    models.append(('LDA', LinearDiscriminantAnalysis()))
-    models.append(('CART', DecisionTreeClassifier()))
-    models.append(('NB', GaussianNB()))
-    models.append(('SVM', SVC()))
-    models.append(('RF',RandomForestClassifier()))
-    models.append(('LR', LogisticRegression(solver=lr_solver, multi_class=lr_multiclass)))
-    return models
+def build_models_names_list():
+    models_names = []
+    models_names.append('KNN')
+    models_names.append('LDA')
+    models_names.append('CART')
+    models_names.append('NB')
+    models_names.append('SVM')
+    models_names.append('RF')
+    models_names.append('LR')
+    return models_names
+    
+def build_models_dictionary(knn_k_value=3,lr_solver='sag',lr_multiclass='ovr'):
+    models_dic = {}
+    
+    models_names = build_models_names_list()
+    models_constructors = []
+    
+    models_constructors.append(KNeighborsClassifier(n_neighbors=knn_k_value))
+    models_constructors.append(LinearDiscriminantAnalysis())
+    models_constructors.append(DecisionTreeClassifier())
+    models_constructors.append(GaussianNB())
+    models_constructors.append(SVC())
+    models_constructors.append(RandomForestClassifier())
+    models_constructors.append(LogisticRegression(solver=lr_solver, multi_class=lr_multiclass))
+    #models_constructors.append()
+    
+    for name, const in zip(models_names, models_constructors):
+        models_dic[name]=const
+        
+    return models_dic
 
-def all_metrics():
+def print_model_results(model_results):
+    dic_result = build_model_results_dic(model_results)
+
+    # Results is a List of tuples each with shape:
+    print('{0:>4}: mean_acc={1:.2f} std_acc={2:.2f} max_acc={3:.2f} max_cmat={4} min_acc={5:.2f} min_cmat={6} median_acc={7:.2f} total_time={8:.2f}'.format(
+            dic_result['name'], dic_result['mean_acc'], dic_result['std_acc'], 
+                       dic_result['best_acc'], ' '.join(map(str, np.array(dic_result['best_cmat']))),
+                       dic_result['worst_acc'], ' '.join(map(str, np.array(dic_result['worst_cmat']))), 
+                       dic_result['median_acc'], dic_result['total_time']))
+#                    if dic_result['median_acc'] > 0.80:
+#                        sorted_np = dic_result['all_acc_np'].sort()
+#                        print('HIGH Median value was found!! Displaying all_acc:\n\t{0}'.format(sorted_np))
+    #all_acc = dic_result['all_acc']
+    #print('all_acc=\n{0}'.format(all_acc))
+    if dic_result['median_acc'] > 0.80:
+        np.set_printoptions(formatter={'float': lambda x: "{0:0.3f}".format(x)})
+        sorted_np = np.sort(dic_result['all_acc_np'])
+        print('HIGH median value was found!! Displaying all_acc:\n\t{0}'.format(sorted_np))
+
+def build_model_results_dic(results_list):
+    results_dic = {}
+    names = all_metrics_names
+    for name, metric in zip(names, results_list):
+        results_dic[name]=metric
+    return results_dic
+        
+
+#def build_models_list(knn_k_value=3,lr_solver='sag',lr_multiclass='ovr'):
+#    models = []
+#    models.append(('KNN', KNeighborsClassifier(n_neighbors=knn_k_value)))
+#    models.append(('LDA', LinearDiscriminantAnalysis()))
+#    models.append(('CART', DecisionTreeClassifier()))
+#    models.append(('NB', GaussianNB()))
+#    models.append(('SVM', SVC()))
+#    models.append(('RF',RandomForestClassifier()))
+#    models.append(('LR', LogisticRegression(solver=lr_solver, multi_class=lr_multiclass)))
+#    return models
+
+def all_metrics_names():
     metrics = []
     metrics.append('name')
     metrics.append('mean_acc')
@@ -113,28 +173,27 @@ def all_metrics():
     metrics.append('worst_acc')
     metrics.append('worst_cmat')
     metrics.append('total_time')
-    metrics.append('all_acc')
+    metrics.append('all_acc_np')
     metrics.append('all_cmat')
     metrics.append('median_acc')
-    metrics.append('median_cmat')
+    #metrics.append('median_cmat')
     return metrics
     
 
 def evaluate_model_using_smote_and_rescaling(all_train_and_test_indexes, 
                                              X_data, 
                                              y_data,
-                                             model_tuple,
+                                             model_name,
                                              folds,
                                              cv_seed=7,
                                              cv_shuffle=True,
                                              smote=True, 
                                              rescaling=True, 
                                              cores_num=1, 
-                                             maximization=True, 
+                                             maximization=True,
+                                             stratified_kfold=False,
+                                             pca=False,
                                              debug=False):
-    
-    all_acc = []
-    all_cmat = []
     
     start_time = time.time()
     
@@ -151,11 +210,16 @@ def evaluate_model_using_smote_and_rescaling(all_train_and_test_indexes,
      
     # Validation setup
 
+    if stratified_kfold:
+        cv = model_selection.StratifiedKFold(n_splits=folds, random_state=cv_seed, shuffle=cv_shuffle)
+        both_indexes = cv.split(X_data, y_data)
+    else:
+        cv = model_selection.KFold(n_splits=folds, random_state=cv_seed, shuffle=cv_shuffle)
+        both_indexes = cv.split(X_data)
     
-    cv = model_selection.KFold(n_splits=folds, random_state=cv_seed, shuffle=cv_shuffle)
-    both_indexes = cv.split(X_data)
-    #both_indexes = all_train_and_test_indexes
-    
+    all_acc = []
+    all_cmat = []
+   
     #for train_indexes, test_indexes in all_train_and_test_indexes:
     for train_indexes, test_indexes in both_indexes:
         
@@ -165,13 +229,31 @@ def evaluate_model_using_smote_and_rescaling(all_train_and_test_indexes,
         y_train = y_fixed[train_indexes]
         y_test = y_fixed[test_indexes]
         
+        # OPTIONAL: Apply PCA to reduce dimensionality
+        if pca:
+            from sklearn.decomposition import PCA
+            
+#            y_train_series = pd.Series(y_train,name='target')
+#            print()
+#            y_test_series = pd.Series(y_test,name='target')
+#            
+#            train_df = pd.concat([y_test_series,X_train],axis=1)
+            
+            pca = PCA(.95)
+            pca.fit(X_train)
+            X_train = pca.transform(X_train)
+            X_test = pca.transform(X_test)
+            #X_test = pca.transform(X_test)
+            
+        
         # STEP 3: oversampling training data using SMOTE if required
         if smote:
             smt = SMOTE() 
             X_train, y_train = smt.fit_sample(X_train, y_train)
     
-        name = model_tuple[0] # model name (string)
-        model = model_tuple[1] # model class (implements fit method)
+        model_dic = build_models_dictionary()
+        model = model_dic[model_name] # picking a model class who implements fit method
+        #model = model_tuple[1] # model class (implements fit method)
         
         # STEP 4: Training (Fit) Model
         model.fit(X_train, y_train)
@@ -182,31 +264,31 @@ def evaluate_model_using_smote_and_rescaling(all_train_and_test_indexes,
         # STEP 6: Building Evaluation Metrics
         acc = metrics.accuracy_score(y_test, y_pred)
         cmat = metrics.confusion_matrix(y_test,y_pred,labels=None,sample_weight=None)
-#        print('acc={0:.4}'.format(acc))
         all_acc.append(acc)
         all_cmat.append(cmat)
-        #cv_results = model_selection.cross_val_score(model, X_data, y_data, cv=kfold, scoring=metric, n_jobs=cores_num)
-    	
+        
     # Converting to Numpy Array to use its statiscs pre-built functions
-    np_all_acc = np.array(all_acc)
-#    print('length of all_acc={0} and np_all_acc={1}'.format(len(all_acc),len(np_all_acc)))
+    all_acc_np = np.array(all_acc)
+    
+    
+#    print('length of all_acc={0} and all_acc_np={1}'.format(len(all_acc),len(all_acc_np)))
     
     # Finding position of the best and the worst individual
-    best_acc_pos  = np.argmax(np_all_acc) if maximization else np.argmin(np_all_acc)
-    worst_acc_pos = np.argmin(np_all_acc) if maximization else np.argmax(np_all_acc)
-    median_pos = folds//2
+    best_acc_pos  = np.argmax(all_acc_np) if maximization else np.argmin(all_acc_np)
+    worst_acc_pos = np.argmin(all_acc_np) if maximization else np.argmax(all_acc_np)
     
-    best_acc = np_all_acc[best_acc_pos]
+    # Using positions to get best and worst accuracy and cmat too
+    best_acc = all_acc_np[best_acc_pos]
     best_cmat = all_cmat[best_acc_pos]
     worst_acc = all_acc[worst_acc_pos]
     worst_cmat = all_cmat[worst_acc_pos]
     
-    mean_acc = np_all_acc.mean()
+    mean_acc = np.mean(all_acc_np)
     
-    median_acc = np_all_acc[median_pos] #np_all_acc[folds//2] if folds % 2 == 1 else (np_all_acc[(folds+1)//2] + np_all_acc[(folds-1)//2])//2
-    median_cmat = all_cmat[median_pos]
+    median_acc = np.median(all_acc_np) #all_acc_np[folds//2] if folds % 2 == 1 else (all_acc_np[(folds+1)//2] + all_acc_np[(folds-1)//2])//2
+    #median_cmat = all_cmat[median_pos]
     
-    std_acc = np_all_acc.std()
+    std_acc = all_acc_np.std()
     
     # Calculing execution time
     end_time = time.time()
@@ -215,13 +297,25 @@ def evaluate_model_using_smote_and_rescaling(all_train_and_test_indexes,
     #dic = {'name':name, 'mean_acc':mean_acc, 'std_acc':std_acc, 'best_acc':best_acc, 
     #'best_cmat':best_cmat, 'worst_acc':worst_acc, 'worst_cmat':worst_cmat, 'total_time':total_time, 'all_acc':np_all_acc, 'all_cmat':all_cmat, 'median_acc':median_acc, 'median_cmat':median_cmat}
     
-    metrics_list = [name,mean_acc,best_acc,std_acc,best_cmat,worst_acc,worst_cmat,total_time,all_acc,all_cmat,median_acc,median_cmat]
 
-    metrics_names = all_metrics()
-    dic = {}
-    for metric_num in range(len(metrics_names)):
-        name = metrics_names[metric_num]
-        dic[name] = metrics_list[metric_num]
+    metrics_values = [model_name,
+                    mean_acc,
+                    std_acc,
+                    best_acc,
+                    best_cmat,
+                    worst_acc,
+                    worst_cmat,
+                    total_time,
+                    all_acc_np,
+                    all_cmat,
+                    median_acc]
+                    #median_cmat]
+
+#    metrics_names = all_metrics_names()
+#    dic = {}
+#    for metric_num in range(len(metrics_names)):
+#        name = metrics_names[metric_num]
+#        dic[name] = metrics_values[metric_num]
         
 #    dic['name'] = name
 #    dic['mean_acc'] = mean_acc
@@ -235,9 +329,8 @@ def evaluate_model_using_smote_and_rescaling(all_train_and_test_indexes,
 #    dic['all_cmat'] = all_cmat
 #    dic['median_acc'] = median_acc
 #    dic['median_cmat'] = median_cmat
-    
-    return dic
-	
+        
+    return metrics_values
 
 #def evaluate_all(X_pandas, y_pandas, knn_k_value,lr_solver,lr_multiclass,
 #                 use_multiprocess=True, use_smote=True, use_rescaling=True, 
@@ -258,7 +351,7 @@ def evaluate_model_using_smote_and_rescaling(all_train_and_test_indexes,
 #    both_indexes = cv.split(X_pandas)
 #
 #    # results variables
-#    all_results_tuples = []
+#    all_results = []
 #    #all_models_names = []
 #    #all_scores = []
 #    #all_std_scores = []
@@ -274,7 +367,7 @@ def evaluate_model_using_smote_and_rescaling(all_train_and_test_indexes,
 #        print('X_pandas class is: ', [base.__name__ for base in X_pandas.__class__.__bases__])
 #        with Pool(cores_num) as p:
 #            from functools import partial
-#            all_results_tuples = p.map(
+#            all_results = p.map(
 #                    partial(evaluate_model_using_smote_and_rescaling, 
 #                            all_train_and_test_indexes=both_indexes,
 #                            X_data = X_pandas,
@@ -291,7 +384,7 @@ def evaluate_model_using_smote_and_rescaling(all_train_and_test_indexes,
 ##            #arguments = (both_indexes, X_pandas, y_pandas, model, cv, smote=use_smote, rescaling=use_rescaling, cores_num=cores_num)
 ##            arguments = (both_indexes, X_pandas, y_pandas, model, cv, use_smote, use_rescaling, cores_num)
 ##            result = pool.apply(evaluate_model_using_smote_and_rescaling, arguments)
-##            all_results_tuples.append(result)
+##            all_results.append(result)
 #        
 #        
 #        
@@ -303,10 +396,10 @@ def evaluate_model_using_smote_and_rescaling(all_train_and_test_indexes,
 #                                                              rescaling=use_rescaling, cores_num=cores_num)
 #            # List of tuples with shape:
 #            # (name, mean_acc, std_acc, best_acc, best_cmat, worst_acc, worst_cmat, total_time)
-#            all_results_tuples.append(dic_result)
+#            all_results.append(dic_result)
 #            
 #            
-#    return all_results_tuples
+#    return all_results
         
     
 
@@ -322,13 +415,15 @@ def evaluate_model_using_smote_and_rescaling(all_train_and_test_indexes,
 def main(argv):
     
     # runtime parameters
-    __TOTAL_RUNNINGS = 20
-    __MULTIPROCESS = False
+    __TOTAL_RUNNINGS = 1
+    __MULTIPROCESS = True
     __USE_SAMPLE_DATA_DIR = True # Use this arguments to set the input directory of attributes files
-    USE_FIXED_SLICE_GROUPING = True # Seeds test 
-    debug = True
+    USE_FIXED_SLICE_GROUPING = True # Seeds test
+    __VERBOSE = True
     
     # Models Parameters
+    __USE_PCA = True
+    __USE_STRATIFIED_KFOLD = True
     knn_k_value=3
     lr_solver='sag'
     lr_multiclass='ovr'
@@ -341,7 +436,7 @@ def main(argv):
     warnings.filterwarnings("ignore", category=UserWarning)
     
     
-    FIXED_SLICE_GROUPING = [0, 80, 1]
+    FIXED_SLICE_GROUPING = [2, 105, 8]
     
     
     # Use this arguments to set the input directory of attributes files
@@ -355,12 +450,12 @@ def main(argv):
     
     # Getting all data
     
-    #start_time = time.time()
-    #print('Loading all atributes data... ', end='')
+    start_time = time.time()
+    print('Loading all atributes data... ', end='')
     attribs, body_planes, slice_num, slice_amounts, output_classes = loadattribs.load_all_data(attributes_dir, csv_file)
-    #end_time = time.time()
-    #total_time = end_time - start_time
-    #print('done (total time to load: {0})'.format(total_time))
+    end_time = time.time()
+    total_time = end_time - start_time
+    print('done (total time to load: {0:.2f}s)'.format(total_time))
     
     import deap_alzheimer
     min_slices_values = loadattribs.getSliceLimits(slice_amounts)[0]
@@ -419,23 +514,32 @@ def main(argv):
     
     
     # Getting models list
-    models = build_models_list(knn_k_value,lr_solver,lr_multiclass)
+    models_names = []
+    models_names.append('KNN')
+#    models_names.append('LDA')
+#    models_names.append('CART')
+#    models_names.append('NB')
+#    models_names.append('SVM')
+#    models_names.append('RF')
+#    models_names.append('LR')
+    #build_models_list(knn_k_value,lr_solver,lr_multiclass)
 
     # All results pool
     all_models_results = []
     
-    # Initializing pool of results
-    for model in models:
-        model_result = []
-        for metric in all_metrics():
-            model_result.append([])
-        all_models_results.append(model_result)
+#    # Initializing pool of results
+#    for model_name in models_names:
+#        model_result = []
+#        metrics_values = all_metrics_values()
+#        for metric in metrics_values:
+#            model_result.append([])
+#        all_models_results.append(model_result)
         
     
-    all_mean_acc = []
-    all_median_acc = []
-    all_median_cmat = []
-    all_time = []
+#    all_mean_acc = []
+#    all_median_acc = []
+#    all_median_cmat = []
+#    all_time = []
     
     for n in list(range(__TOTAL_RUNNINGS)):
         ## all_experiments_results is a LIST of LISTS of Dictionaries which have as keys:
@@ -462,13 +566,13 @@ def main(argv):
         both_indexes = cv.split(X_pandas)
     
         # Current Experiment: Results from each model
-        all_results_tuples = []
+        experiment_results = []
 
         
         if use_multiprocess and __name__ == "__main__":
             with Pool(cores_num) as p:
                 from functools import partial
-                all_results_tuples = p.map(
+                experiment_results = p.map(
                         partial(evaluate_model_using_smote_and_rescaling, 
                                 all_train_and_test_indexes=both_indexes,
                                 X_data = X_pandas,
@@ -477,31 +581,29 @@ def main(argv):
                                 smote=use_smote,
                                 rescaling=use_rescaling,
                                 cores_num=cores_num,
-                                maximization=True),
-                        models)
+                                maximization=True,
+                                pca=__USE_PCA,
+                                stratified_kfold=__USE_STRATIFIED_KFOLD),
+                        models_names)
             
         else:
-            for model in models:
+            for model in models_names:
                 #print('* Evaluation {0} model...'.format(model[0]))
-                dic_result = evaluate_model_using_smote_and_rescaling(both_indexes, X_pandas, y_pandas,
-                                                                  model, kcv_folds, smote=use_smote,
-                                                                 rescaling=use_rescaling, cores_num=cores_num)
+                model_results = evaluate_model_using_smote_and_rescaling(
+                        both_indexes, X_pandas, y_pandas,
+                        model, kcv_folds, smote=use_smote,
+                        rescaling=use_rescaling, cores_num=cores_num,
+                        stratified_kfold=__USE_STRATIFIED_KFOLD,
+                        pca=__USE_PCA)
+                experiment_results.append(model_results)
                 
-                if True:
-                    # Results is a List of tuples each with shape:
-                    print('{0:>4}: mean_acc={1:.4f} std_acc={2:.4f} max_acc={3:.4f} max_cmat={4} min_acc={5:.4f} min_cmat={6} median_acc={7} median_cmat={8} total_time={9:.4f}'.format(
-                            dic_result['name'], dic_result['mean_acc'], dic_result['std_acc'], 
-                                       dic_result['best_acc'], ' '.join(map(str, np.array(dic_result['best_cmat']))),
-                                       dic_result['worst_acc'], ' '.join(map(str, np.array(dic_result['worst_cmat']))), 
-                                       dic_result['median_acc'], ' '.join(map(str, np.array(dic_result['median_cmat']))),
-                                       dic_result['total_time']))
-                    #all_acc = dic_result['all_acc']
-                    #print('all_acc=\n{0}'.format(all_acc))
                 
-                all_results_tuples.append(dic_result)
+            all_models_results.append(experiment_results)
+            
+        
                 
 
-        #print (all_results_tuples['KNN'])
+        #print (all_results['KNN'])
         
 ########################################################
         # Compiling result data from this experiment

@@ -8,7 +8,12 @@ Created on Wed Mar 13 08:33:13 2019
 
 import loadattribs
 
-from sklearn.neighbors import KNeighborsClassifier
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.neighbors.classification import KNeighborsClassifier
+from sklearn.ensemble.forest import RandomForestClassifier
+from sklearn.naive_bayes import GaussianNB
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
+from sklearn.linear_model import LogisticRegression
 from sklearn.svm import SVC
 
 
@@ -23,6 +28,9 @@ import time
 import random
 import multiprocessing
 from multiprocessing import Pool 
+
+
+__MODEL = RandomForestClassifier()
 
 '''
 #import matplotlib.pyplot as plt
@@ -327,7 +335,7 @@ def runKNN(X_data,
 
     return accuracy, confusion_matrix
 
-def runSVM(X_data,
+def runMODEL(X_data,
         y_data,
         k_value=3, 
         knn_debug=False, 
@@ -335,11 +343,13 @@ def runSVM(X_data,
         use_rescaling=True,
         cv_type='kcv',
         kcv_value=9,
-        use_Pool=False
+        use_Pool=False,
+        model=__MODEL
         ):
     
     # Main variables
-    model = SVC()
+#    global __MODEL
+#    model = __MODEL
     #knn = KNeighborsClassifier(n_neighbors=k_value)
     accuracy = 0
     confusion_matrix = []
@@ -610,7 +620,7 @@ def main(argv):
     all_cmat = []
     
     for r in list(range(__TOTAL_RUNNINGS)):
-        accuracy, conf_matrix = runSVM(data_partition, 
+        accuracy, conf_matrix = runMODEL(data_partition, 
                                        output_classes, 
                                        K_VALUE,
                                        knn_debug=KNN_DEBUG,
