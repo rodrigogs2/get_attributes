@@ -34,7 +34,8 @@ import multiprocessing
 from multiprocessing import Pool
 import copy
 
-
+import warnings
+warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 
 # Globla Slicing Arguments
@@ -79,9 +80,9 @@ __CORES_NUM = 4
 # Default Evolutionary Parameters
 __MUTATE_INDP = 0.15
 __CROSSOVER_INDP = 0.40
-__POPULATION_SIZE = 200
+__POPULATION_SIZE = 100
 __NUMBER_OF_GENERATIONS = 120
-__MAX_GENERATIONS_WITHOUT_IMPROVEMENTS = 20
+__MAX_GENERATIONS_WITHOUT_IMPROVEMENTS = 4
 __TOURNEAMENT_SIZE_IS_DYNAMIC = False
 __TOURNEAMENT_UPDATE_LIMIT = 10
 __TOURNEAMENT_LAST_UPDATE = 0
@@ -233,7 +234,7 @@ def buildDataFrames(X_data, y_data):
     return X_pandas, y_pandas
 
 def evaluateSlicesGrouping(individual, all_attribs, all_slice_amounts,
-                           output_classes, model, debug=__VERBOSE):
+                           output_classes, model_tuple, debug=__VERBOSE):
 
     all_partitions_merged = get_data_partition(individual, all_attribs, all_slice_amounts, debug=__VERBOSE)
     
@@ -246,7 +247,7 @@ def evaluateSlicesGrouping(individual, all_attribs, all_slice_amounts,
     X_pandas, y_pandas = buildDataFrames(all_partitions_merged, output_classes)
 
     # Preparing cross-validation
-    cv = KFold(n_splits=folds, random_state=42, shuffle=True)
+    cv = KFold(n_splits=__KCV_FOLDS, random_state=42, shuffle=True)
     all_train_and_test_indexes = cv.split(X_pandas)
     
     dicionary_results = evaluate_model(all_train_and_test_indexes, 
@@ -281,7 +282,7 @@ def evaluate_model(all_train_and_test_indexes,
         X_fixed = X_data
         
     # Added to solve column-vector issue
-    import numpy as np
+    #import numpy as np
     y_fixed = np.ravel(y_data)
      
     # Validation setup
@@ -353,7 +354,7 @@ def evaluate_model(all_train_and_test_indexes,
     
     metrics_list = [name,mean_acc,best_acc,std_acc,best_cmat,worst_acc,worst_cmat,total_time,all_acc,all_cmat,median_acc,median_cmat]
 
-    metrics_names = all_metrics()
+    metrics_names = all_metrics_names()
     dic = {}
     for metric_num in range(len(metrics_names)):
         name = metrics_names[metric_num]
@@ -669,6 +670,8 @@ def saveExperimentsDataToFile(exp_num, best_ind, bestIndividuals, generationsWit
 def run_deap(all_attribs, 
              all_slice_amounts,
              all_output_classes,
+             all_genders,
+             all_ages,
              max_consecutive_slices=__DEFAULT_MAX_CONSEC_SLICES, # max length of the each slices range
              number_of_groupings=__DEFAULT_NUMBER_OF_GROUPINGS, # controls how many slices ranges there will be used
              current_experiment=1,
@@ -697,10 +700,10 @@ def run_deap(all_attribs,
     if __VERBOSE:
         print('* Starting experiment {0}'.format(current_experiment))
     
-    # Updating global variables
-    __BODY_PLANES = loadattribs.getBplanes(all_slice_amounts)
-    __MIN_SLICES_VALUES,__MAX_SLICES_VALUES = loadattribs.getSliceLimits(all_slice_amounts)
-    #print('__MIN_SLICES_VALUES=',__MIN_SLICES_VALUES,'\n__MIN_SLICES_VALUES=',__MIN_SLICES_VALUES)
+#    # Updating global variables
+#    __BODY_PLANES = loadattribs.getBplanes(all_slice_amounts)
+#    __MIN_SLICES_VALUES,__MAX_SLICES_VALUES = loadattribs.getSliceLimits(all_slice_amounts)
+#    #print('__MIN_SLICES_VALUES=',__MIN_SLICES_VALUES,'\n__MIN_SLICES_VALUES=',__MIN_SLICES_VALUES)
     
     updateGeneBounds(__BODY_PLANES, __MIN_SLICES_VALUES, max_consecutive_slices, __DEFAULT_NUMBER_OF_GROUPINGS, __VERBOSE)
     
@@ -864,7 +867,7 @@ def run_deap(all_attribs,
         fits_and_matrices = list(map(toolbox.evaluate,offspring)) # list of (fitness,conf_matrix) tuples
         if __VERBOSE:
             print('\t Done!')
-            
+            __DEFAULT_NUMBER_OF_GROUPINGS
             
         if __VERBOSE:
             print('\t* Updating fitness and confusion matrix of offspring...',end='')
@@ -1034,7 +1037,7 @@ def main(argv):
         number_of_groupings = __DEFAULT_NUMBER_OF_GROUPINGS
         
         # Loading all data just once
-        all_attribs, all_body_planes, all_slice_num, all_slice_amounts, all_output_classes = loadattribs.load_all_data(attribs_dir, csv_file)
+        all_attribs, all_body_planes, all_slice_num, all_slice_amounts, all_output_classes, all_genders, all_ages, demographics_dic = loadattribs.load_all_data(attribs_dir, csv_file)
         
         #max_slice_values = loadattribs.getSliceLimits(all_slice_num)
         max_consecutive_slices = __DEFAULT_MAX_CONSEC_SLICES
@@ -1050,6 +1053,14 @@ def main(argv):
         all_experiments = list(range(1,number_of_experiments + 1))
         print('Running experiments...')
         
+
+        global __BODY_PLANES, __MAX_SLICES_VALUES, __MIN_SLICES_VALUES
+        # Updating global variables
+        __BODY_PLANES = loadattribs.getBplanes(all_slice_amounts)
+        __MIN_SLICES_VALUES,__MAX_SLICES_VALUES = loadattribs.getSliceLimits(all_slice_amounts)
+    
+        
+        
         if __MULTI_CPU_USAGE and __name__ == "__main__":
             cores_num = multiprocessing.cpu_count()
             with Pool(cores_num) as p:
@@ -1059,6 +1070,8 @@ def main(argv):
                             all_attribs,
                             all_slice_amounts,
                             all_output_classes,
+                            all_genders,
+                            all_ages,
                             max_consecutive_slices, # length of slices range
                             number_of_groupings),
                     all_experiments)
@@ -1068,6 +1081,8 @@ def main(argv):
                 run_deap(all_attribs,
                          all_slice_amounts,
                          all_output_classes,
+                         all_genders,
+                         all_ages,
                          max_consecutive_slices, # length of slices range
                          number_of_groupings,
                          experiment) # controls how many slices ranges there will be used
