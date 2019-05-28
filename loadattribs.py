@@ -89,11 +89,14 @@ def load_attribs_and_metadata(attributes_file):
     
     return  attribs, body_plane, slice_numbers, slice_amount
 
+
 def build_cvs_dictionary(csv_file):
     alzheimer_dic = {'CN': 0, 'MCI': 1, 'AD': 2}
     demographics_dictionary = {}
 
     if os.path.exists(csv_file):
+        #import deap_alzheimer as da
+        #genders_dic = da.build_gender_to_num_dic()
         try:
             with open(csv_file, 'r') as file:
                 #print('CSV File received: ', csv_file)
@@ -103,6 +106,13 @@ def build_cvs_dictionary(csv_file):
                     image_id = 'I' + row[3]
                     gender = row[6]
                     age = row[7]
+                    
+                    try:
+                        age = int(age)
+                    except ValueError:
+                        print('* Invalid AGE({0}) entry for image ID {1}. CSV file has problems'.format(age, image_id))
+                        
+                    
                     image_class = alzheimer_dic[row[5]]
                     dic = {'class':image_class, 'gender':gender, 'age':age}
                     demographics_dictionary[image_id] = dic
@@ -114,11 +124,11 @@ def build_cvs_dictionary(csv_file):
         raise ValueError(message)
     return demographics_dictionary
 
-def get_demographic_data(attributes_filename, demographics_dictionary):
-    image_id = re.findall(r'I[0-9]+',attributes_filename)
+def get_image_demographic_data(attributes_filename, demographics_dictionary):
+    image_id = re.findall(r'I[0-9]+',attributes_filename) # returns a array with all regular exp matches
     
-    if len(image_id) > 0:
-        subject_class_gender_sex = demographics_dictionary[image_id[0]]
+    if len(image_id) > 0: # if there is at least one match...
+        subject_class_gender_sex = demographics_dictionary[image_id[0]] # pick up demographics for the first
     else:
         raise ValueError('There aren\'t image IDs in this attributes filename ({0})'.format(attributes_filename))
 
@@ -147,7 +157,7 @@ def load_all_data(attributes_dir, csv_file):
         all_slice_num.append(slice_num)
         all_slice_amounts.append(slice_amounts)  
         
-        demographics_data = get_demographic_data(file,image_id_dictionary)
+        demographics_data = get_image_demographic_data(file,image_id_dictionary)
         
         image_class = demographics_data['class']
         gender = demographics_data['gender']
@@ -155,6 +165,74 @@ def load_all_data(attributes_dir, csv_file):
         all_classes.append(image_class)
         all_genders.append(gender)
         all_ages.append(age)
+        
+    array_all_classes = np.array(all_classes, dtype=np.int64)
+    array_all_ages = np.array(all_ages, dtype=np.int64)
+    
+    return all_attribs, all_body_planes, all_slice_num, all_slice_amounts, array_all_classes, all_genders, array_all_ages, image_id_dictionary
+
+    # getting partition from 80 to 100th slice from the f-th (f=0) attribs file
+    #partition = get_attributes_from_a_range_of_slices(attribs,slice_amounts,p,fs,ls)
+    #print('\n-Shape of Attributes Partition of the {0}th data file from the slices {2} and {3}: {1}'.format(f,partition.shape,fs,ls))
+    
+    #first = fs
+    #for at in partition:
+    #    print('\n-Attributes from {1}th slice of the {2}th attribs file:\n{0}'.format(at,first,f))
+    #    first = first + 1
+    
+    #print('\nPartition:\n{0}'.format(partition))
+    
+def load_all_data_using_filters(attributes_dir, csv_file, valid_genders=['M','F'], min_age=0.0, max_age=200.0, debug=False):
+    all_attribs = []
+    all_body_planes = []
+    all_slice_num = []
+    all_slice_amounts = []
+    all_classes = []
+    all_genders = []
+    all_ages = []
+    
+    image_id_dictionary  = build_cvs_dictionary(csv_file)
+    
+    # Getting all attributes files from attributes directory
+    attribs_files = list_dir.list_files(attributes_dir,".txt")
+    
+    # Loop which loads attributes, demographics values and slicing info
+    for file in attribs_files:
+        if debug: print('\t* extracting data from file:',file)
+        demographics_data = get_image_demographic_data(file,image_id_dictionary)
+        if debug: print('\t* this file demographics: ',demographics_data)
+        gender = demographics_data['gender']
+        if debug: print('\t* gender loaded: ',gender)
+        age = demographics_data['age']
+        if debug: print('\t* age loaded: ', age)
+        
+        age_is_valid = age >= min_age and age <= max_age
+        if debug: print('\t* age_is_valid: ', age_is_valid)
+        
+        try:
+            if valid_genders.index(gender) >= 0:
+                gender_is_valid = True
+        except ValueError:
+            gender_is_valid = False
+            
+        if debug: print('gender_is_valid: ',gender_is_valid)
+        
+        if gender_is_valid and age_is_valid:
+            if debug: print('Great! Both gender and age are valid!')
+            attribs,body_plane,slice_num,slice_amounts = load_attribs_and_metadata(file)
+            
+            all_attribs.append(attribs)
+            all_body_planes.append(body_plane)
+            all_slice_num.append(slice_num)
+            all_slice_amounts.append(slice_amounts)  
+        
+            demographics_data = get_image_demographic_data(file,image_id_dictionary)
+            
+            image_class = demographics_data['class']
+
+            all_classes.append(image_class)
+            all_genders.append(gender)
+            all_ages.append(float(age))
         
     array_all_classes = np.array(all_classes, dtype=np.int64)
     array_all_ages = np.array(all_ages, dtype=np.int64)
@@ -268,6 +346,28 @@ def getBplanes(all_slice_amounts):
     return list(range(len(all_slice_amounts[0])))
 
 
+def getAttribsPartitionFromSingleSlicesGroupingUsingFilters(all_attribs,
+                                                all_slice_amounts,
+                                                #all_genders,
+                                                #all_ages,
+                                                #demographic_dic,
+                                                specific_body_plane, 
+                                                initial_slice_num, 
+                                                total_slices,
+                                                valid_genders=['M','F'],
+                                                max_age=200,
+                                                min_age=0):
+    attribs_partition = []
+    for attribs,s_amount in zip(all_attribs,all_slice_amounts):
+        attribs_partition.append(get_attributes_from_a_range_of_slices(attribs,
+                                                                       s_amount,
+                                                                       specific_body_plane,
+                                                                       initial_slice_num,
+                                                                       total_slices))
+    
+    
+    return np.array(attribs_partition, dtype=np.float64)
+
 
 def getAttribsPartitionFromSingleSlicesGrouping(all_attribs,
                                                 all_slice_amounts,
@@ -315,54 +415,65 @@ def main(argv):
     ## Testting area
     
     # Use this arguments to set the input directory of attributes files
-    attributes_dir = "/home/rodrigo/Documents/_phd/attributes_amostra/"
-    csv_file = '/home/rodrigo/Documents/_phd/csv_files/ADNI1_Complete_All_Yr_3T.csv' 
+    attributes_dir = "../../attributes_amostra/"
+    csv_file = './ADNI1_Complete_All_Yr_3T.csv' 
     # Getting all files
     
     print('* Loading all attributes data...')
-    all_attribs, body_planes, slice_num, slice_amounts, output_classes, all_genders, all_ages, demographics_dic = load_all_data(attributes_dir, csv_file)
+    all_attribs, body_planes, slice_num, slice_amounts, output_classes, all_genders, all_ages, demographics_dic = load_all_data_using_filters(attributes_dir, csv_file)
     print('* ...done')
     
+    print('all_attribs=',all_attribs)
     print('len(all_attribs)=',len(all_attribs))
     print('body_planes=',len(body_planes))
     print('len(slice_num)=',len(slice_num))
     print('len(output_classes)=',len(output_classes))
     print('len(all_genders)=',len(all_genders))
     print('len(all_ages)',len(all_ages))
-    
-    print('all_attribs[0].shape=', all_attribs[0].shape)
-    print('body_planes[0].shape=', body_planes[0].shape)
-    print('slice_num[0]=', slice_num[0])
-    print('output_classes[0]=', output_classes[0])
-    print('all_genders[0]=', all_genders[0])
-    print('all_ages[0]=', all_ages[0])
+    print('all_ages array:',np.array(all_ages))
+    print('all_genders array: ', np.array(all_genders))
+#    
+#    print('all_attribs[0].shape=', all_attribs[0].shape)
+#    print('body_planes[0].shape=', body_planes[0].shape)
+#    print('slice_num[0]=', slice_num[0])
+#    print('output_classes[0]=', output_classes[0])
+#    print('all_genders[0]=', all_genders[0])
+#    print('all_ages[0]=', all_ages[0])
     #print('demographics_dic=',demographics_dic)
     
     bplane = 2
     start_slice = 123
     total_slices = 5
     
-    print('\n* Testing function to extract a range of slices from a attributes row...')
-    croped_attribs = get_attributes_from_a_range_of_slices(all_attribs[0], 
-                                                           slice_amounts[0], 
-                                                           bplane, 
-                                                           start_slice, 
-                                                           total_slices)
     
-    print('shape of croped_attribs: ',croped_attribs.shape)
-    print('cropped attribs:\n',croped_attribs)
+    data_partition = getAttribsPartitionFromSingleSlicesGrouping(
+            all_attribs,
+            slice_amounts,
+            bplane, 
+            start_slice, 
+            total_slices)
     
-    import deap_alzheimer as da
-    possibles_bplanes = getBplanes(slice_amounts)
-    min_slice_limits, max_slice_limits = getSliceLimits(slice_amounts)
-    print('min_slice_limits',min_slice_limits)
-    print('max_slice_limits',max_slice_limits)
-    
-    sg1 = da.buildRandomSliceGrouping(possibles_bplanes,length=20,max_indexes=min_slice_limits,dbug=False)
-    sg2 = da.buildRandomSliceGrouping(possibles_bplanes,length=20,max_indexes=min_slice_limits,dbug=False)
-    all_slices_groupings = list(sg1+sg2)
-    
-    print('sg1 + sg2 concatenation= ',all_slices_groupings)
+#    print('\n* Testing function to extract a range of slices from a attributes row...')
+#    croped_attribs = get_attributes_from_a_range_of_slices(all_attribs[0], 
+#                                                           slice_amounts[0], 
+#                                                           bplane, 
+#                                                           start_slice, 
+#                                                           total_slices)
+#    
+#    print('shape of croped_attribs: ',croped_attribs.shape)
+#    print('cropped attribs:\n',croped_attribs)
+#    
+#    import deap_alzheimer as da
+#    possibles_bplanes = getBplanes(slice_amounts)
+#    min_slice_limits, max_slice_limits = getSliceLimits(slice_amounts)
+#    print('min_slice_limits',min_slice_limits)
+#    print('max_slice_limits',max_slice_limits)
+#    
+#    sg1 = da.buildRandomSliceGrouping(possibles_bplanes,length=20,max_indexes=min_slice_limits,dbug=False)
+#    sg2 = da.buildRandomSliceGrouping(possibles_bplanes,length=20,max_indexes=min_slice_limits,dbug=False)
+#    all_slices_groupings = list(sg1+sg2)
+#    
+#    print('sg1 + sg2 concatenation= ',all_slices_groupings)
 
     
     '''

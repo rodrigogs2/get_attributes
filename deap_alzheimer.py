@@ -18,7 +18,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.svm import SVC
 
 from sklearn.model_selection import KFold
-from sklearn.model_selection import train_test_split
+#from sklearn.model_selection import train_test_split
 from sklearn import metrics
 
 import numpy as np
@@ -26,8 +26,8 @@ from deap import base, creator, tools, algorithms
 
 import random, sys, os
 import loadattribs 
-import knn_alzheimer_crossvalidate
-import evaluating_classifiers as ec
+#import knn_alzheimer_crossvalidate
+#import evaluating_classifiers as ec
 import getopt
 import time
 import datetime
@@ -37,8 +37,40 @@ import copy
 
 import warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning)
-import matplotlib
 import matplotlib.pyplot as plt
+
+
+
+def build_models_names_list():
+    models_names = []
+    models_names.append('KNN')
+    models_names.append('LDA')
+    models_names.append('CART')
+    models_names.append('NB')
+    models_names.append('SVM')
+    models_names.append('RF')
+    models_names.append('LR')
+    return models_names
+
+def build_models_dictionary(knn_k_value=3,lr_solver='sag',lr_multiclass='ovr'):
+    models_dic = {}
+    
+    models_names = build_models_names_list()
+    models_constructors = []
+    
+    models_constructors.append(KNeighborsClassifier(n_neighbors=knn_k_value))
+    models_constructors.append(LinearDiscriminantAnalysis())
+    models_constructors.append(DecisionTreeClassifier())
+    models_constructors.append(GaussianNB())
+    models_constructors.append(SVC())
+    models_constructors.append(RandomForestClassifier())
+    models_constructors.append(LogisticRegression(solver=lr_solver, multi_class=lr_multiclass))
+    #models_constructors.append()
+    
+    for name, const in zip(models_names, models_constructors):
+        models_dic[name]=const
+        
+    return models_dic
 
 
 # Globla Slicing Arguments
@@ -53,6 +85,12 @@ import matplotlib.pyplot as plt
 # Global Evolutionary Parameters
 #global __TOURNEAMENT_SIZE, __MUTATE_INDP, __CROSSOVER_INDP, __NUMBER_OF_GENERATIONS, __POPULATION_SIZE, __DEFAULT_TARGET_FITNESS, __DEFAULT_WORST_FITNESS
 
+# Data Cohort
+__VALID_GENDERS = ['M','F']
+__MIN_AGE = 0.0
+__MAX_AGE = 200.0
+
+
 # Slicing Arguments
 __ALL_ATTRIBS = []
 __ALL_OUTPUT_VALUES = []
@@ -63,16 +101,7 @@ __DEFAULT_MAX_CONSEC_SLICES = 20
 __DEFAULT_NUMBER_OF_GROUPINGS = 1
 
 # Classifier parameters
-__MODEL_NAME = 'RF'
-
-__DEFAULT_KNN_K_VALUE = 3
-__DEFAULT_LR_SOLVER = 'sag'
-__DEFAULT_LR_MULTICLASS = 'ovr'
-
-__MODELS = ec.build_models_dictionary(
-        knn_k_value=-__DEFAULT_KNN_K_VALUE,
-        lr_solver=__DEFAULT_LR_SOLVER,
-        lr_multiclass=__DEFAULT_LR_MULTICLASS)
+__MODEL_NAME = 'KNN'
 #    models = []
 #    models.append(('KNN', KNeighborsClassifier(n_neighbors=knn_k_value)))
 #    models.append(('LDA', LinearDiscriminantAnalysis()))
@@ -81,15 +110,29 @@ __MODELS = ec.build_models_dictionary(
 #    models.append(('SVM', SVC()))
 #    models.append(('RF',RandomForestClassifier()))
 #    models.append(('LR', LogisticRegression(solver=lr_solver, multi_class=lr_multiclass)))
+
+
+# Default Specific Parameters for each Classifier
+__DEFAULT_KNN_K_VALUE = 3
+__DEFAULT_LR_SOLVER = 'sag'
+__DEFAULT_LR_MULTICLASS = 'ovr'
+
+
+__MODELS = build_models_dictionary(
+        knn_k_value=-__DEFAULT_KNN_K_VALUE,
+        lr_solver=__DEFAULT_LR_SOLVER,
+        lr_multiclass=__DEFAULT_LR_MULTICLASS)
 __MODEL_CONSTRUCTOR = __MODELS[__MODEL_NAME]
 
 
 __USE_RESCALING = True
 __USE_SMOTE = True
+__USE_PCA = True
 __CV_TYPE = 'kcv'
 __CV_MULTI_THREAD = False
 __CV_SHUFFLE = True
 __KCV_FOLDS = 10
+__USE_STRATIFIED_KFOLD = True
 __MAXIMIZATION_PROBLEM = True
 
 # Runtime Parameters
@@ -102,9 +145,9 @@ __CORES_NUM = 4
 # Default Evolutionary Parameters
 __MUTATE_INDP = 0.15
 __CROSSOVER_INDP = 0.40
-__POPULATION_SIZE = 100
-__NUMBER_OF_GENERATIONS = 120
-__MAX_GENERATIONS_WITHOUT_IMPROVEMENTS = 4
+__POPULATION_SIZE = 60
+__NUMBER_OF_GENERATIONS = 10
+__MAX_GENERATIONS_WITHOUT_IMPROVEMENTS = 3
 __TOURNEAMENT_SIZE_IS_DYNAMIC = False
 __TOURNEAMENT_UPDATE_LIMIT = 10
 __TOURNEAMENT_LAST_UPDATE = 0
@@ -128,6 +171,16 @@ __DURATION = 1 #seconds
 __FREQ = 440 # Hz
 
 
+def build_gender_to_num_dic():
+    return {'M':1, 'F':-1}
+
+def num_genders_list(all_genders):
+    dic = build_gender_to_num_dic()
+    num_genders_list = []
+    for gender in all_genders:
+        num_genders_list.append(dic[gender])
+    return num_genders_list
+
 def update_tourneament_size(current_gen, last_improvement_gen, toolbox):
     global __TOURNEAMENT_SIZE, __TOURNEAMENT_SIZE_IS_DYNAMIC, __TOURNEAMENT_LAST_UPDATE
     global __VERBOSE, __TOURNEAMENT_SIZE_INCREMENT_VALUE, __INITIAL_TOURNEAMENT_SIZE, __TOURNEAMENT_INCREMENTS 
@@ -150,7 +203,6 @@ def update_tourneament_size(current_gen, last_improvement_gen, toolbox):
 def getRandomPlane(planes = __BODY_PLANES):
     plane = random.sample(planes,1)[0]
     return plane
-
 
 
 def getRandomTotalSlices(length = __DEFAULT_MAX_CONSEC_SLICES):
@@ -199,7 +251,7 @@ def initIndividual(planes = __BODY_PLANES,
     return data
 
 #####################################################################################
-def get_data_partition(individual, all_attribs, all_slice_amounts, debug=__VERBOSE):
+def get_data_partition(individual, all_attribs, all_slice_amounts, all_genders, all_ages, debug=__VERBOSE):
     all_groupings_partitions_list = []
     
     ind_size = len(individual)
@@ -228,7 +280,7 @@ def get_data_partition(individual, all_attribs, all_slice_amounts, debug=__VERBO
     
     return all_partitions_merged
 
-def buildDataFrames(X_data, y_data):
+def buildDataFrames(X_data, y_data, all_genders, all_ages, debug=False):
     # Data preparation
     try:
         new_dimensions = (X_data.shape[0],
@@ -240,12 +292,12 @@ def buildDataFrames(X_data, y_data):
         print('\t')
         sys.exit(-1)
     
-    if __VERBOSE: 
+    if __VERBOSE and debug: 
         print('* Reshaping for this data partition with these dimensions:',new_dimensions)
 
     new_partition = np.reshape(X_data, new_dimensions)
         
-    if __VERBOSE: 
+    if __VERBOSE and debug: 
         print('...done')
         print('* The shape of a line data retrived from the new partition=', new_partition[0].shape)
     
@@ -253,163 +305,33 @@ def buildDataFrames(X_data, y_data):
     X_pandas = pd.DataFrame(data=new_partition)
     y_pandas = pd.DataFrame(data=y_data)
     
+    # Reconding genders to numeric format
+    num_genders = num_genders_list(all_genders)
+    #num_genders = all_genders
+    
+    # numeric Gender and Age columns inclusion
+    genders_series = pd.Series(num_genders,name='gender')
+    age_series = pd.Series(all_ages,name='age')
+    
+    # Concatanation
+    X_pandas = pd.concat([X_pandas, genders_series, age_series],axis=1,ignore_index=True)
+    
+    # Formating all data as float
+    X_pandas = X_pandas.astype(dtype=np.float64)
+    
     return X_pandas, y_pandas
 
-def evaluateSlicesGrouping(individual, all_attribs, all_slice_amounts,
-                           output_classes, model_tuple, debug=__VERBOSE):
-
-    all_partitions_merged = get_data_partition(individual, all_attribs, all_slice_amounts, debug=__VERBOSE)
-    
-    global __USE_RESCALING, __USE_SMOTE, __CV_TYPE, __CV_MULTI_THREAD, __KCV_FOLDS, __CV_SHUFFLE
-    global __MAXIMIZATION_PROBLEM, __CORES_NUM
-    
-    folds = __KCV_FOLDS
-    
-    
-    # Formating data as Pandas DataFrame
-    X_pandas, y_pandas = buildDataFrames(all_partitions_merged, output_classes)
-
-    # Preparing cross-validation
-    cv = KFold(n_splits=__KCV_FOLDS, random_state=42, shuffle=True)
-    all_train_and_test_indexes = cv.split(X_pandas)
-    
-    dicionary_results = evaluate_model(all_train_and_test_indexes, 
-                                       X_pandas, y_pandas , model,
-                                       __KCV_FOLDS, cv_seed=7, cv_shuffle=__CV_SHUFFLE,
-                                       smote=__USE_SMOTE, rescaling=__USE_RESCALING, cores_num=1, 
-                                       maximization=__MAXIMIZATION_PROBLEM, debug=__VERBOSE)
-    accuracy = dicionary_results['median_acc']
-    conf_matrix = dicionary_results['median_cmat']
-    
-    return accuracy, conf_matrix
-
-
-def evaluate_model(all_train_and_test_indexes, 
-                   X_data, y_data, model_tuple,
-                   folds, cv_seed=7, cv_shuffle=True,
-                   smote=True, rescaling=True, cores_num=1, 
-                   maximization=True, debug=False):
-    
-    all_acc = []
-    all_cmat = []
-    
-    start_time = time.time()
-    
-    # STEP 1: perform rescaling if required
-    if rescaling:
-        
-        from sklearn import preprocessing
-        scaler = preprocessing.StandardScaler()
-        X_fixed = scaler.fit_transform(X_data) # Fit your data on the scaler object
-    else:
-        X_fixed = X_data
-        
-    # Added to solve column-vector issue
-    y_fixed = np.ravel(y_data)
-     
-    # Validation setup
-
-    from sklearn import model_selection 
-    cv = model_selection.KFold(n_splits=folds, random_state=cv_seed, shuffle=cv_shuffle)
-    both_indexes = cv.split(X_data)
-    #both_indexes = all_train_and_test_indexes
-    
-    #for train_indexes, test_indexes in all_train_and_test_indexes:
-    for train_indexes, test_indexes in both_indexes:
-        
-        # STEP 2: split data between test and train sets
-        X_train = X_fixed[train_indexes]
-        X_test = X_fixed[test_indexes]
-        y_train = y_fixed[train_indexes]
-        y_test = y_fixed[test_indexes]
-        
-        # STEP 3: oversampling training data using SMOTE if required
-        if smote:
-            from imblearn.over_sampling import SMOTE
-            smt = SMOTE() 
-            X_train, y_train = smt.fit_sample(X_train, y_train)
-    
-        name = model_tuple[0] # model name (string)
-        model = model_tuple[1] # model class (implements fit method)
-        
-        # STEP 4: Training (Fit) Model
-        model.fit(X_train, y_train)
-        
-        # STEP 5: Testing Model (Making Predictions)
-        y_pred = model.predict(X_test) # testing
-        
-        # STEP 6: Building Evaluation Metrics
-        acc = metrics.accuracy_score(y_test, y_pred)
-        cmat = metrics.confusion_matrix(y_test,y_pred,labels=None,sample_weight=None)
-#        print('acc={0:.4}'.format(acc))
-        all_acc.append(acc)
-        all_cmat.append(cmat)
-        #cv_results = model_selection.cross_val_score(model, X_data, y_data, cv=kfold, scoring=metric, n_jobs=cores_num)
-    	
-    # Converting to Numpy Array to use its statiscs pre-built functions
-    np_all_acc = np.array(all_acc)
-#    print('length of all_acc={0} and np_all_acc={1}'.format(len(all_acc),len(np_all_acc)))
-    
-    # Finding position of the best and the worst individual
-    best_acc_pos  = np.argmax(np_all_acc) if maximization else np.argmin(np_all_acc)
-    worst_acc_pos = np.argmin(np_all_acc) if maximization else np.argmax(np_all_acc)
-    median_pos = folds//2
-    
-    best_acc = np_all_acc[best_acc_pos]
-    best_cmat = all_cmat[best_acc_pos]
-    worst_acc = all_acc[worst_acc_pos]
-    worst_cmat = all_cmat[worst_acc_pos]
-    
-    mean_acc = np_all_acc.mean()
-    
-    median_acc = np_all_acc[median_pos] #np_all_acc[folds//2] if folds % 2 == 1 else (np_all_acc[(folds+1)//2] + np_all_acc[(folds-1)//2])//2
-    median_cmat = all_cmat[median_pos]
-    
-    std_acc = np_all_acc.std()
-    
-    # Calculing execution time
-    end_time = time.time()
-    total_time = end_time - start_time
-    
-    #dic = {'name':name, 'mean_acc':mean_acc, 'std_acc':std_acc, 'best_acc':best_acc, 
-    #'best_cmat':best_cmat, 'worst_acc':worst_acc, 'worst_cmat':worst_cmat, 'total_time':total_time, 'all_acc':np_all_acc, 'all_cmat':all_cmat, 'median_acc':median_acc, 'median_cmat':median_cmat}
-    
-    metrics_list = [name,mean_acc,best_acc,std_acc,best_cmat,worst_acc,worst_cmat,total_time,all_acc,all_cmat,median_acc,median_cmat]
-
-    metrics_names = ec.all_metrics()
-
-    dic = {}
-    for metric_num in range(len(metrics_names)):
-        name = metrics_names[metric_num]
-        dic[name] = metrics_list[metric_num]
-        
-#    dic['name'] = name
-#    dic['mean_acc'] = mean_acc
-#    dic['std_acc'] = std_acc
-#    dic['best_acc'] = best_acc
-#    dic['best_cmat'] = best_cmat
-#    dic['worst_acc'] = worst_acc
-#    dic['worst_cmat'] = worst_cmat
-#    dic['total_time'] = total_time
-#    dic['all_acc'] = all_acc
-#    dic['all_cmat'] = all_cmat
-#    dic['median_acc'] = median_acc
-#    dic['median_cmat'] = median_cmat
-    
-    return dic    
-#####################################################################################
-
 # Evaluates a individual instance represented by Slices Groupings 
-def evaluateSlicesGroupingsKNN(individual, # list of integers
+def evaluateSlicesGroupingsNOVO(individual, # list of integers
                                all_attribs,
                                all_slice_amounts,
                                output_classes,
-                               k_value=__DEFAULT_KNN_K_VALUE,
+                               all_genders,
+                               all_ages,
+                               model_name=__MODEL_NAME,
                                debug=__VERBOSE):
     
     all_groupings_partitions_list = [] 
-    accuracy = 0.0
-    conf_matrix = [[1,0,0],[0,1,0],[0,0,1]] # typical confusion matrix for the Alzheimer classification problem     
     ind_size = len(individual)
     
     if ind_size % 3 == 0:    
@@ -437,21 +359,237 @@ def evaluateSlicesGroupingsKNN(individual, # list of integers
     
     global __USE_RESCALING, __USE_SMOTE, __CV_TYPE, __CV_MULTI_THREAD, __KCV_FOLDS, __MODEL_CONSTRUCTOR
     
-    # Classifying merged data
-    accuracy, conf_matrix = knn_alzheimer_crossvalidate.runMODEL(
-            all_partitions_merged,
-            output_classes,
-            k_value,
-            knn_debug=debug,
-            use_smote=__USE_SMOTE,
-            use_rescaling=__USE_RESCALING,
-            cv_type=__CV_TYPE,
-            kcv_value=__KCV_FOLDS,
-            use_Pool=__CV_MULTI_THREAD,
-            model=__MODEL_CONSTRUCTOR)
+    # Formating data as Pandas DataFrame
+    X_pandas, y_pandas = buildDataFrames(all_partitions_merged, output_classes, all_genders, all_ages)
+
+    dicionary_results = evaluate_model(X_pandas, y_pandas , model_name,
+                                       folds=__KCV_FOLDS, cv_seed=7, cv_shuffle=__CV_SHUFFLE,
+                                       smote=__USE_SMOTE, rescaling=__USE_RESCALING, cores_num=1, 
+                                       maximization=__MAXIMIZATION_PROBLEM, stratified_kfold=__USE_STRATIFIED_KFOLD,
+                                       debug=__VERBOSE)
+    accuracy = dicionary_results['mean_acc']
+    conf_matrix = dicionary_results['conf_matrix']
     
     
     return accuracy, conf_matrix
+
+def evaluateSlicesGroupings(individual, all_attribs, all_slice_amounts,
+                           output_classes, all_genders, all_ages, 
+                           model_name, debug=__VERBOSE):
+
+    if individual.fitness.valid:
+            
+        all_partitions_merged = get_data_partition(individual, all_attribs, all_slice_amounts, all_genders, all_ages, debug=__VERBOSE)
+        
+        global __USE_RESCALING, __USE_SMOTE, __CV_TYPE, __CV_MULTI_THREAD, __KCV_FOLDS, __CV_SHUFFLE
+        global __MAXIMIZATION_PROBLEM, __CORES_NUM, __USE_STRATIFIED_KFOLD
+        
+        # Formating data as Pandas DataFrame
+        X_pandas, y_pandas = buildDataFrames(all_partitions_merged, output_classes)
+    
+        # Preparing cross-validation
+        #cv = KFold(n_splits=__KCV_FOLDS, random_state=42, shuffle=True)
+        #all_train_and_test_indexes = cv.split(X_pandas)
+        
+        dicionary_results = evaluate_model(X_pandas, y_pandas , model_name,
+                                           folds=__KCV_FOLDS, cv_seed=7, cv_shuffle=__CV_SHUFFLE,
+                                           smote=__USE_SMOTE, rescaling=__USE_RESCALING, cores_num=1, 
+                                           maximization=__MAXIMIZATION_PROBLEM, stratified_kfold=__USE_STRATIFIED_KFOLD,
+                                           pca=__USE_PCA,
+                                           debug=__VERBOSE)
+        accuracy = dicionary_results['mean_acc']
+        conf_matrix = dicionary_results['confusion_matrix']
+
+    
+    return accuracy, conf_matrix
+
+
+def evaluate_model(X_data, y_data, model_name,
+                   folds, cv_seed=7, cv_shuffle=True,
+                   smote=True, rescaling=True, cores_num=1, 
+                   maximization=True, stratified_kfold=True,
+                   pca=False, debug=False):
+    
+    all_acc = []
+    #all_cmat = []
+    
+    start_time = time.time()
+    
+    # STEP 1: perform rescaling if required
+    if rescaling:
+        
+        from sklearn import preprocessing
+        scaler = preprocessing.StandardScaler()
+        X_fixed = scaler.fit_transform(X_data) # Fit your data on the scaler object
+    else:
+        X_fixed = X_data
+        
+    # Added to solve column-vector issue
+    y_fixed = np.ravel(y_data)
+     
+    # Validation setup
+
+    from sklearn import model_selection 
+#    cv = model_selection.KFold(n_splits=folds, random_state=cv_seed, shuffle=cv_shuffle)
+#    both_indexes = cv.split(X_data)
+    
+    if stratified_kfold:
+        cv = model_selection.StratifiedKFold(n_splits=folds, random_state=cv_seed, shuffle=cv_shuffle)
+        both_indexes = cv.split(X_data, y_data)
+    else:
+        cv = model_selection.KFold(n_splits=folds, random_state=cv_seed, shuffle=cv_shuffle)
+        both_indexes = cv.split(X_data)
+    
+    num_classes = len(np.unique(np.array(y_data))) # number of classes
+    conf_matrix = np.zeros(dtype=np.int64, shape=[num_classes,num_classes])
+    
+    #for train_indexes, test_indexes in all_train_and_test_indexes:
+    for train_indexes, test_indexes in both_indexes:
+        
+        # STEP 2: split data between test and train sets
+        X_train = X_fixed[train_indexes]
+        X_test = X_fixed[test_indexes]
+        y_train = y_fixed[train_indexes]
+        y_test = y_fixed[test_indexes]
+        
+        # OPTIONAL: Apply PCA to reduce dimensionality
+        if pca:
+            from sklearn.decomposition import PCA
+            pca = PCA(.95)
+            pca.fit(X_train)
+            X_train = pca.transform(X_train)
+            X_test = pca.transform(X_test)
+        
+        # STEP 3: oversampling training data using SMOTE if required
+        if smote:
+            from imblearn.over_sampling import SMOTE
+            smt = SMOTE() 
+            X_train, y_train = smt.fit_sample(X_train, y_train)
+    
+        models_dic = build_models_dictionary()
+        model = models_dic[model_name] # model receives a object from a class who implements the .fit method
+        
+        # STEP 4: Training (Fit) Model
+        model.fit(X_train, y_train)
+        
+        # STEP 5: Testing Model (Making Predictions)
+        y_pred = model.predict(X_test) # testing
+        
+        # STEP 6: Building Evaluation Metrics
+        acc = metrics.accuracy_score(y_test, y_pred)
+        cmat = metrics.confusion_matrix(y_test,y_pred,labels=None,sample_weight=None)
+#        print('acc={0:.4}'.format(acc))
+        all_acc.append(acc)
+        conf_matrix = conf_matrix + np.array(cmat)
+        #cv_results = model_selection.cross_val_score(model, X_data, y_data, cv=kfold, scoring=metric, n_jobs=cores_num)
+    	
+    # Converting to Numpy Array to use its statiscs pre-built functions
+    np_all_acc = np.array(all_acc)
+#    print('length of all_acc={0} and np_all_acc={1}'.format(len(all_acc),len(np_all_acc)))
+    
+    # Finding position of the best and the worst individual
+    best_acc_pos  = np.argmax(np_all_acc) if maximization else np.argmin(np_all_acc)
+    worst_acc_pos = np.argmin(np_all_acc) if maximization else np.argmax(np_all_acc)
+    median_pos = folds//2
+    
+    best_acc = np_all_acc[best_acc_pos]
+    #best_cmat = all_cmat[best_acc_pos]
+    worst_acc = all_acc[worst_acc_pos]
+    #worst_cmat = all_cmat[worst_acc_pos]
+    
+    mean_acc = np_all_acc.mean()
+    
+    median_acc = np_all_acc[median_pos] #np_all_acc[folds//2] if folds % 2 == 1 else (np_all_acc[(folds+1)//2] + np_all_acc[(folds-1)//2])//2
+    #median_cmat = all_cmat[median_pos]
+    
+    std_acc = np_all_acc.std()
+    
+    # Calculing execution time
+    end_time = time.time()
+    total_time = end_time - start_time
+    
+    #dic = {'name':name, 'mean_acc':mean_acc, 'std_acc':std_acc, 'best_acc':best_acc, 
+    #'best_cmat':best_cmat, 'worst_acc':worst_acc, 'worst_cmat':worst_cmat, 'total_time':total_time, 'all_acc':np_all_acc, 'all_cmat':all_cmat, 'median_acc':median_acc, 'median_cmat':median_cmat}
+    
+    #metrics_list = [model_name,mean_acc,best_acc,std_acc,best_cmat,worst_acc,worst_cmat,total_time,all_acc,all_cmat,median_acc,median_cmat]
+    metrics_list = [model_name,mean_acc,best_acc,std_acc,worst_acc,conf_matrix,total_time,all_acc,median_acc]
+
+    metrics_names = all_metrics_names()
+
+    dic = {}
+    for metric_num in range(len(metrics_names)):
+        name = metrics_names[metric_num]
+        dic[name] = metrics_list[metric_num]
+        
+#    dic['name'] = name
+#    dic['mean_acc'] = mean_acc
+#    dic['std_acc'] = std_acc
+#    dic['best_acc'] = best_acc
+#    dic['best_cmat'] = best_cmat
+#    dic['worst_acc'] = worst_acc
+#    dic['worst_cmat'] = worst_cmat
+#    dic['total_time'] = total_time
+#    dic['all_acc'] = all_acc
+#    dic['all_cmat'] = all_cmat
+#    dic['median_acc'] = median_acc
+#    dic['median_cmat'] = median_cmat
+    
+    return dic    
+#####################################################################################
+
+# Evaluates a individual instance represented by Slices Groupings 
+#def evaluateSlicesGroupingsKNN(individual, # list of integers
+#                               all_attribs,
+#                               all_slice_amounts,
+#                               output_classes,
+#                               k_value=__DEFAULT_KNN_K_VALUE,
+#                               debug=__VERBOSE):
+#    
+#    all_groupings_partitions_list = [] 
+#    accuracy = 0.0
+#    conf_matrix = [[1,0,0],[0,1,0],[0,0,1]] # typical confusion matrix for the Alzheimer classification problem     
+#    ind_size = len(individual)
+#    
+#    if ind_size % 3 == 0:    
+#        # Getting data from a slices grouping
+#        for g in list(range(ind_size)):
+#            if g % 3 == 0:
+#                plane = individual[g]
+#                first_slice = individual[g+1]
+#                total_slices = individual[g+2]
+#                                
+#                partition = loadattribs.getAttribsPartitionFromSingleSlicesGrouping(all_attribs,all_slice_amounts,plane,first_slice,total_slices)
+#                
+#                # append data to a list which will be merged later
+#                all_groupings_partitions_list.append(partition)
+#                
+#                g = g + 3
+#    else:
+#        raise ValueError('Bad formatted individual: slices grouping length ({0}) must be a multiple of three.\nIndividual = {1}'.format(ind_size,individual))
+#        
+#    # Merging all partitions data
+#    all_partitions_merged = all_groupings_partitions_list[0]
+#    for i in range(1,len(all_groupings_partitions_list)):
+#        all_partitions_merged = all_partitions_merged + all_groupings_partitions_list[i]
+#    
+#    
+#    global __USE_RESCALING, __USE_SMOTE, __CV_TYPE, __CV_MULTI_THREAD, __KCV_FOLDS, __MODEL_CONSTRUCTOR
+#    
+#    # Classifying merged data
+#    accuracy, conf_matrix = knn_alzheimer_crossvalidate.runMODEL(
+#            all_partitions_merged,
+#            output_classes,
+#            k_value,
+#            knn_debug=debug,
+#            use_smote=__USE_SMOTE,
+#            use_rescaling=__USE_RESCALING,
+#            cv_type=__CV_TYPE,
+#            kcv_value=__KCV_FOLDS,
+#            use_Pool=__CV_MULTI_THREAD,
+#            model=__MODEL_CONSTRUCTOR)
+#    
+#    
+#    return accuracy, conf_matrix
 
 
 def print_population_fitness(some_population):
@@ -512,18 +650,27 @@ def build_parameters_string(max_consecutive_slices,number_of_groupings):
     strPool.append('__VERBOSE = {0}\n'.format(__VERBOSE ))
     strPool.append('__CORES_NUM = {0}\n'.format(__CORES_NUM ))
     
-    # Classifier parameters
+    # Classifier pipeline parameters
     global __USE_RESCALING, __USE_SMOTE, __CV_TYPE, __CV_MULTI_THREAD, __CV_SHUFFLE
-    global __KCV_FOLDS, __MAXIMIZATION_PROBLEM, __DEFAULT_KNN_K_VALUE
-    strPool.append('\n# Classifier parameters\n')
-    strPool.append('__USE_RESCALING = {0}\n'.format(__DEAP_RUN_ID))
-    strPool.append('__USE_SMOTE = {0}\n'.format(__DEAP_RUN_ID))
-    strPool.append('__CV_TYPE = {0}\n'.format(__DEAP_RUN_ID))
-    strPool.append('__CV_MULTI_THREAD = {0}\n'.format(__DEAP_RUN_ID))
-    strPool.append('__CV_SHUFFLE = {0}\n'.format(__DEAP_RUN_ID))
+    global __KCV_FOLDS, __MAXIMIZATION_PROBLEM, __USE_PCA, __USE_STRATIFIED_KFOLD
+    strPool.append('\n# Classifier pipeline parameters\n')
+    strPool.append('__USE_RESCALING = {0}\n'.format(__USE_RESCALING))
+    strPool.append('__USE_SMOTE = {0}\n'.format(__USE_SMOTE))
+    strPool.append('__USE_PCA = {0}\n'.format(__USE_PCA))
+    
+    strPool.append('__CV_TYPE = {0}\n'.format(__CV_TYPE))
+    strPool.append('__CV_MULTI_THREAD = {0}\n'.format(__CV_MULTI_THREAD))
+    strPool.append('__CV_SHUFFLE = {0}\n'.format(__CV_SHUFFLE))
     strPool.append('__KCV_FOLDS = {0}\n'.format(__DEAP_RUN_ID))
-    strPool.append('__MAXIMIZATION_PROBLEM = {0}\n'.format(__DEAP_RUN_ID))
+    strPool.append('__USE_STRATIFIED_KFOLD = {0}\n'.format(__KCV_FOLDS))
+    strPool.append('__MAXIMIZATION_PROBLEM = {0}\n'.format(__MAXIMIZATION_PROBLEM))
+    
+    
+    # Specific models parameters
+    global __DEFAULT_KNN_K_VALUE, __DEFAULT_LR_SOLVER, __DEFAULT_LR_MULTICLASS
     strPool.append(' __DEFAULT_KNN_K_VALUE ={0}\n'.format(__DEFAULT_KNN_K_VALUE))
+    strPool.append(' __DEFAULT_LR_SOLVER ={0}\n'.format(__DEFAULT_LR_SOLVER))
+    strPool.append(' __DEFAULT_LR_MULTICLASS ={0}\n'.format(__DEFAULT_LR_MULTICLASS))
 
     # Slicing parameters
     global __BODY_PLANES, __MAX_SLICES_VALUES, __MIN_SLICES_VALUES, __DEFAULT_MAX_CONSEC_SLICES
@@ -548,8 +695,8 @@ def build_parameters_string(max_consecutive_slices,number_of_groupings):
     strPool.append(' __POPULATION_SIZE = {0}\n'.format(__POPULATION_SIZE ))
     strPool.append(' __NUMBER_OF_GENERATIONS = {0}\n'.format(__NUMBER_OF_GENERATIONS))
     strPool.append(' __MAX_GENERATIONS_WITHOUT_IMPROVEMENTS = {0}\n'.format(__MAX_GENERATIONS_WITHOUT_IMPROVEMENTS ))
-    strPool.append(' __DEFAULT_TARGET_FITNESS = {0}\n'.format(__DEFAULT_TARGET_FITNESS))
-    strPool.append(' __DEFAULT_WORST_FITNESS = {0}\n'.format(__DEFAULT_WORST_FITNESS))
+    #strPool.append(' __DEFAULT_TARGET_FITNESS = {0}\n'.format(__DEFAULT_TARGET_FITNESS))
+    #strPool.append(' __DEFAULT_WORST_FITNESS = {0}\n'.format(__DEFAULT_WORST_FITNESS))
     strPool.append(' __GENES_LOW_LIMITS = {0}\n'.format(__GENES_LOW_LIMITS))
     strPool.append(' __GENES_UP_LIMITS = {0}\n'.format(__GENES_UP_LIMITS))
 
@@ -577,7 +724,6 @@ def saveParametersFile(max_consec_slices,num_groupings):
     # checking parameters file
     if not os.path.exists(param_full_filename):
         blank_file = True
-        #param_file_dir,param_filename = os.path.split(param_full_filename)
         
         # creates output dir when path doesnt exist
         if output_dir_path != '' and not os.path.exists(output_dir_path):
@@ -633,12 +779,15 @@ def save_final_result_boxplot(best_inds,labels,title='Title',debug=__VERBOSE,bck
         print('\n* Saving final result as bloxplot imagem in: {0}'.format(img_full_filename))
     
     fig.savefig(img_full_filename)
+    
+    if __VERBOSE: 
+        print('\t Done')
+    
 
 
 
 def saveResultsFile(all_experiments_best_ind):
     global __OUTPUT_DIRECTORY, __DEAP_RUN_ID
-    #output_dir_path = os.path.join(__OUTPUT_DIRECTORY, build_experiments_output_dir_name())
     output_dir_path = build_experiments_output_dir_name()
     
     
@@ -651,7 +800,6 @@ def saveResultsFile(all_experiments_best_ind):
     # checking parameters file
     if not os.path.exists(results_full_filename):
         blank_file = True
-        #param_file_dir,param_filename = os.path.split(param_full_filename)
         
         # creates output dir when path doesnt exist
         if output_dir_path != '' and not os.path.exists(output_dir_path):
@@ -664,8 +812,7 @@ def saveResultsFile(all_experiments_best_ind):
     # Writting to output file
     try :
         
-        file_handler = open(param_full_filename, append_mode)
-        
+        file_handler = open(results_full_filename, append_mode)
         if blank_file:
             head = 'Experiment, Best_Individual, Best_Fit, Best_ConfMatrix'
             file_handler.write(head)
@@ -679,18 +826,12 @@ def saveResultsFile(all_experiments_best_ind):
             
             all_best_fit.append(best_fit)
         file_handler.close()
-        
-        
             
     except os.error:
         print("\n*** ERROR: file %s can not be written" % results_full_filename)
         exit(1)
-    
-    return param_full_filename
+    return results_full_filename
 
-
-    
-    
 
 def build_experiments_output_dir_name():
     
@@ -748,7 +889,9 @@ def append_experiment_data_to_output_file(
             head = 'generation, best_fit, best_individual, confusion_matrix\n'
             output_file.write(head)
         
-        line = '{0:3d}, {1:.8f}, {2}, {3}\n'.format(gen_num, bfit, best_ind, str(best_ind.confusion_matrix))
+        flatten_cmat = ' '.join(map(str, np.array(best_ind.confusion_matrix)))
+        #flatten_cmat = ' '.join(np.array(best_ind.confusion_matrix))
+        line = '{0:3d}, {1:.8f}, {2}, {3}\n'.format(gen_num, bfit, best_ind, flatten_cmat)
         output_file.write(line)
         output_file.close()
     except os.error:
@@ -758,6 +901,22 @@ def append_experiment_data_to_output_file(
     
     return exp_output_full_filename
 
+def all_metrics_names():
+    metrics = []
+    metrics.append('name')
+    metrics.append('mean_acc')
+    metrics.append('std_acc')
+    metrics.append('best_acc')
+    #metrics.append('best_cmat')
+    metrics.append('worst_acc')
+    metrics.append('conf_matrix')
+    metrics.append('total_time')
+    metrics.append('all_acc_np')
+    #metrics.append('all_cmat')
+    metrics.append('median_acc')
+    #metrics.append('median_cmat')
+    return metrics
+
 
 def saveExperimentsDataToFile(exp_num, best_ind, bestIndividuals, generationsWithImprovements, runID):
     best_accuracy = best_ind.fitness.values[0]
@@ -766,7 +925,7 @@ def saveExperimentsDataToFile(exp_num, best_ind, bestIndividuals, generationsWit
     
     if len(bestIndividuals) == len(generationsWithImprovements):
     
-        for ind, gnum in zip(bestIndividuals, generationsWithImprovements):
+        for ind, gnum in zip(bestIndividuals, generationsWithImprovements,):
             #cmat = ind.confusion_matrix
             append_experiment_data_to_output_file(exp_num,gnum,ofile,ind)
         
@@ -776,14 +935,6 @@ def saveExperimentsDataToFile(exp_num, best_ind, bestIndividuals, generationsWit
         sys.exit(1)
     
     return ofile
-
-
-
-
-
-
-
-
 
 
 def run_deap(all_attribs, 
@@ -809,6 +960,7 @@ def run_deap(all_attribs,
     global __VERBOSE
     global __OUTPUT_DIRECTORY
     global __MODEL_NAME
+    global __USE_PCA
     global __MODEL_CONSTRUCTOR
     
     # Slicing global Variables
@@ -855,15 +1007,36 @@ def run_deap(all_attribs,
                      creator.Individual,
                      toolbox.init_grouping)
     
+#    toolbox.register('evaluate',
+#                     evaluateSlicesGroupingsKNN,
+#                     all_attribs = all_attribs,
+#                     all_slice_amounts = all_slice_amounts,
+#                     output_classes = all_output_classes,
+#                     k_value = __DEFAULT_KNN_K_VALUE,
+#                     debug=False)
+    
+
     toolbox.register('evaluate',
-                     evaluateSlicesGroupingsKNN,
+                     evaluateSlicesGroupingsNOVO,
                      all_attribs = all_attribs,
                      all_slice_amounts = all_slice_amounts,
                      output_classes = all_output_classes,
-                     k_value = __DEFAULT_KNN_K_VALUE,
+                     all_genders = all_genders,
+                     all_ages = all_ages,
+                     #k_value = __DEFAULT_KNN_K_VALUE,
                      debug=False)
-#    
             
+
+    
+    
+#    toolbox.register('evaluate',
+#                     evaluateSlicesGroupings,
+#                     all_attribs = all_attribs,
+#                     all_slice_amounts = all_slice_amounts,
+#                     output_classes = all_output_classes,
+#                     k_value = __DEFAULT_KNN_K_VALUE,
+#                     debug=False)
+#            
     # defining population as a plane list
     toolbox.register('population',
                      tools.initRepeat,
@@ -964,7 +1137,7 @@ def run_deap(all_attribs,
     # Initial Population Resume (remove later)
     if __VERBOSE:
         print('* Initial population with {0} individuals:'.format(len(pop)))
-        for ind in pop: print ('Individual={0}\t Fitness={1}'.format(ind,ind.fitness.values[0]))
+        for ind in pop: print ('Individual={0}\t Fitness={1:.03f}'.format(ind,ind.fitness.values[0]))
         print('Done!')
         
     
@@ -1158,7 +1331,9 @@ def main(argv):
         number_of_groupings = __DEFAULT_NUMBER_OF_GROUPINGS
         
         # Loading all data just once
-        all_attribs, all_body_planes, all_slice_num, all_slice_amounts, all_output_classes, all_genders, all_ages, demographics_dic = loadattribs.load_all_data(attribs_dir, csv_file)
+        global __VALID_GENDERS, __MAX_AGE, __MIN_AGE
+        
+        all_attribs, all_body_planes, all_slice_num, all_slice_amounts, all_output_classes, all_genders, all_ages, demographics_dic = loadattribs.load_all_data_using_filters(attribs_dir, csv_file, valid_genders=__VALID_GENDERS, max_age=__MAX_AGE, min_age=__MIN_AGE)
         
         #max_slice_values = loadattribs.getSliceLimits(all_slice_num)
         max_consecutive_slices = __DEFAULT_MAX_CONSEC_SLICES
@@ -1188,7 +1363,7 @@ def main(argv):
             
             with Pool(cores_num) as p:
                 from functools import partial
-                all_experiments_best_ind = map(
+                all_experiments_best_ind = p.map(
                     partial(run_deap,
                             all_attribs,
                             all_slice_amounts,

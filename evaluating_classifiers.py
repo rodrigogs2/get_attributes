@@ -94,36 +94,7 @@ def get_boxplot(results,labels): # boxplot algorithm comparison
     ax.set_xticklabels(labels)
     plt.show()
 
-def build_models_names_list():
-    models_names = []
-    models_names.append('KNN')
-    models_names.append('LDA')
-    models_names.append('CART')
-    models_names.append('NB')
-    models_names.append('SVM')
-    models_names.append('RF')
-    models_names.append('LR')
-    return models_names
-    
-def build_models_dictionary(knn_k_value=3,lr_solver='sag',lr_multiclass='ovr'):
-    models_dic = {}
-    
-    models_names = build_models_names_list()
-    models_constructors = []
-    
-    models_constructors.append(KNeighborsClassifier(n_neighbors=knn_k_value))
-    models_constructors.append(LinearDiscriminantAnalysis())
-    models_constructors.append(DecisionTreeClassifier())
-    models_constructors.append(GaussianNB())
-    models_constructors.append(SVC())
-    models_constructors.append(RandomForestClassifier())
-    models_constructors.append(LogisticRegression(solver=lr_solver, multi_class=lr_multiclass))
-    #models_constructors.append()
-    
-    for name, const in zip(models_names, models_constructors):
-        models_dic[name]=const
-        
-    return models_dic
+
 
 def print_model_results(model_results):
     dic_result = build_model_results_dic(model_results)
@@ -146,7 +117,8 @@ def print_model_results(model_results):
 
 def build_model_results_dic(results_list):
     results_dic = {}
-    names = all_metrics_names
+    import deap_alzheimer
+    names = deap_alzheimer.all_metrics_names
     for name, metric in zip(names, results_list):
         results_dic[name]=metric
     return results_dic
@@ -163,38 +135,15 @@ def build_model_results_dic(results_list):
 #    models.append(('LR', LogisticRegression(solver=lr_solver, multi_class=lr_multiclass)))
 #    return models
 
-def all_metrics_names():
-    metrics = []
-    metrics.append('name')
-    metrics.append('mean_acc')
-    metrics.append('std_acc')
-    metrics.append('best_acc')
-    metrics.append('best_cmat')
-    metrics.append('worst_acc')
-    metrics.append('worst_cmat')
-    metrics.append('total_time')
-    metrics.append('all_acc_np')
-    metrics.append('all_cmat')
-    metrics.append('median_acc')
-    #metrics.append('median_cmat')
-    return metrics
-    
 
 def evaluate_model_using_smote_and_rescaling(all_train_and_test_indexes, 
-                                             X_data, 
-                                             y_data,
-                                             model_name,
-                                             folds,
-                                             cv_seed=7,
-                                             cv_shuffle=True,
-                                             smote=True, 
-                                             rescaling=True, 
-                                             cores_num=1, 
-                                             maximization=True,
-                                             stratified_kfold=False,
+                                             X_data, y_data, model_name,
+                                             folds, cv_seed=7, cv_shuffle=True,
+                                             smote=True, rescaling=True, cores_num=1, 
+                                             maximization=True, stratified_kfold=False,
                                              pca=False,
                                              debug=False):
-    
+    all_acc = []
     start_time = time.time()
     
     # STEP 1: perform rescaling if required
@@ -217,8 +166,8 @@ def evaluate_model_using_smote_and_rescaling(all_train_and_test_indexes,
         cv = model_selection.KFold(n_splits=folds, random_state=cv_seed, shuffle=cv_shuffle)
         both_indexes = cv.split(X_data)
     
-    all_acc = []
-    all_cmat = []
+    num_classes = len(np.unique(np.array(y_data))) # number of classes
+    conf_matrix = np.zeros(dtype=np.int64, shape=[num_classes,num_classes])
    
     #for train_indexes, test_indexes in all_train_and_test_indexes:
     for train_indexes, test_indexes in both_indexes:
@@ -265,7 +214,8 @@ def evaluate_model_using_smote_and_rescaling(all_train_and_test_indexes,
         acc = metrics.accuracy_score(y_test, y_pred)
         cmat = metrics.confusion_matrix(y_test,y_pred,labels=None,sample_weight=None)
         all_acc.append(acc)
-        all_cmat.append(cmat)
+        #all_cmat.append(cmat)
+        conf_matrix = conf_matrix + np.array(cmat)
         
     # Converting to Numpy Array to use its statiscs pre-built functions
     all_acc_np = np.array(all_acc)
@@ -279,9 +229,9 @@ def evaluate_model_using_smote_and_rescaling(all_train_and_test_indexes,
     
     # Using positions to get best and worst accuracy and cmat too
     best_acc = all_acc_np[best_acc_pos]
-    best_cmat = all_cmat[best_acc_pos]
+    #best_cmat = all_cmat[best_acc_pos]
     worst_acc = all_acc[worst_acc_pos]
-    worst_cmat = all_cmat[worst_acc_pos]
+    #worst_cmat = all_cmat[worst_acc_pos]
     
     mean_acc = np.mean(all_acc_np)
     
@@ -302,12 +252,12 @@ def evaluate_model_using_smote_and_rescaling(all_train_and_test_indexes,
                     mean_acc,
                     std_acc,
                     best_acc,
-                    best_cmat,
+                    #best_cmat,
                     worst_acc,
-                    worst_cmat,
+                    conf_matrix,
                     total_time,
                     all_acc_np,
-                    all_cmat,
+                    #all_cmat,
                     median_acc]
                     #median_cmat]
 
@@ -416,7 +366,7 @@ def main(argv):
     
     # runtime parameters
     __TOTAL_RUNNINGS = 1
-    __MULTIPROCESS = True
+    __MULTIPROCESS = False
     __USE_SAMPLE_DATA_DIR = True # Use this arguments to set the input directory of attributes files
     USE_FIXED_SLICE_GROUPING = True # Seeds test
     __VERBOSE = True
@@ -452,7 +402,7 @@ def main(argv):
     
     start_time = time.time()
     print('Loading all atributes data... ', end='')
-    attribs, body_planes, slice_num, slice_amounts, output_classes = loadattribs.load_all_data(attributes_dir, csv_file)
+    attribs, body_planes, slice_num, slice_amounts, output_classes, all_genders, all_ages, demographics_dic = loadattribs.load_all_data(attributes_dir, csv_file)
     end_time = time.time()
     total_time = end_time - start_time
     print('done (total time to load: {0:.2f}s)'.format(total_time))
