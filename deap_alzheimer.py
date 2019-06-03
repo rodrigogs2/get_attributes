@@ -37,6 +37,8 @@ import copy
 
 import warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning)
+warnings.filterwarnings("ignore", category=RuntimeWarning)
+
 import matplotlib.pyplot as plt
 
 
@@ -86,7 +88,7 @@ def build_models_dictionary(knn_k_value=3,lr_solver='sag',lr_multiclass='ovr'):
 #global __TOURNEAMENT_SIZE, __MUTATE_INDP, __CROSSOVER_INDP, __NUMBER_OF_GENERATIONS, __POPULATION_SIZE, __DEFAULT_TARGET_FITNESS, __DEFAULT_WORST_FITNESS
 
 # Data Cohort
-__VALID_GENDERS = ['M','F']
+__VALID_GENDERS = ['F'] #['M','F']
 __MIN_AGE = 0.0
 __MAX_AGE = 200.0
 
@@ -97,7 +99,7 @@ __ALL_OUTPUT_VALUES = []
 __BODY_PLANES = []
 __MAX_SLICES_VALUES = []
 __MIN_SLICES_VALUES = []
-__DEFAULT_MAX_CONSEC_SLICES = 20
+__DEFAULT_MAX_CONSEC_SLICES = 20 #20
 __DEFAULT_NUMBER_OF_GROUPINGS = 1
 
 # Classifier parameters
@@ -140,14 +142,14 @@ __DEAP_RUN_ID = ''
 __OUTPUT_DIRECTORY = './'
 __MULTI_CPU_USAGE = False
 __VERBOSE = False
-__CORES_NUM = 4
+__CORES_NUM = 1
 
 # Default Evolutionary Parameters
-__MUTATE_INDP = 0.15
+__MUTATE_INDP = 0.10
 __CROSSOVER_INDP = 0.40
-__POPULATION_SIZE = 60
-__NUMBER_OF_GENERATIONS = 10
-__MAX_GENERATIONS_WITHOUT_IMPROVEMENTS = 3
+__POPULATION_SIZE = 200
+__NUMBER_OF_GENERATIONS = 100
+__MAX_GENERATIONS_WITHOUT_IMPROVEMENTS = 10
 __TOURNEAMENT_SIZE_IS_DYNAMIC = False
 __TOURNEAMENT_UPDATE_LIMIT = 10
 __TOURNEAMENT_LAST_UPDATE = 0
@@ -169,6 +171,16 @@ __SEEDS_FILE = ''
 __ALARM = True
 __DURATION = 1 #seconds
 __FREQ = 440 # Hz
+
+
+def model_name_is_valid(model_name):
+    names = build_models_names_list()
+    try:
+        names.index(model_name)
+        return True
+    except ValueError:
+        return False
+    
 
 
 def build_gender_to_num_dic():
@@ -641,6 +653,12 @@ def build_parameters_string(max_consecutive_slices,number_of_groupings):
     strPool.append('__MODEL_NAME = {0}\n'.format(__MODEL_NAME))
     strPool.append('__MODEL_CONSTRUCTOR = {0}\n'.format(__MODEL_CONSTRUCTOR))
     
+    # DATA COHORT
+    strPool.append('\n# Data Cohort parameters\n')
+    strPool.append('__VALID_GENDERS = '.format(__VALID_GENDERS))
+    strPool.append('__MIN_AGE = '.format(__MIN_AGE))
+    strPool.append('__MAX_AGE = '.format(__MAX_AGE))
+    
     # Runtime parameters    
     global __DEAP_RUN_ID, __MULTI_CPU_USAGE, __OUTPUT_DIRECTORY, __VERBOSE, __CORES_NUM
     strPool.append('\n# Runtime parameters\n')
@@ -661,8 +679,8 @@ def build_parameters_string(max_consecutive_slices,number_of_groupings):
     strPool.append('__CV_TYPE = {0}\n'.format(__CV_TYPE))
     strPool.append('__CV_MULTI_THREAD = {0}\n'.format(__CV_MULTI_THREAD))
     strPool.append('__CV_SHUFFLE = {0}\n'.format(__CV_SHUFFLE))
-    strPool.append('__KCV_FOLDS = {0}\n'.format(__DEAP_RUN_ID))
-    strPool.append('__USE_STRATIFIED_KFOLD = {0}\n'.format(__KCV_FOLDS))
+    strPool.append('__KCV_FOLDS = {0}\n'.format(__KCV_FOLDS))
+    strPool.append('__USE_STRATIFIED_KFOLD = {0}\n'.format(__USE_STRATIFIED_KFOLD))
     strPool.append('__MAXIMIZATION_PROBLEM = {0}\n'.format(__MAXIMIZATION_PROBLEM))
     
     
@@ -786,12 +804,12 @@ def save_final_result_boxplot(best_inds,labels,title='Title',debug=__VERBOSE,bck
 
 
 
-def saveResultsFile(all_experiments_best_ind):
+def saveResultsCSVFile(all_experiments_best_ind):
     global __OUTPUT_DIRECTORY, __DEAP_RUN_ID
     output_dir_path = build_experiments_output_dir_name()
     
     
-    filename = 'results_{0}_{1}.txt'.format(__DEAP_RUN_ID, __MODEL_NAME)
+    filename = 'results_{0}_{1}.csv'.format(__DEAP_RUN_ID, __MODEL_NAME)
     results_full_filename = os.path.join(output_dir_path, filename)
     
     append_mode = "a"
@@ -809,19 +827,25 @@ def saveResultsFile(all_experiments_best_ind):
                 print ('*** ERROR: Output directory (%s) can not be created\n' % output_dir_path)
                 sys.exit(1)
         
+    if __VERBOSE: 
+        print('\n* Saving best results of each experiment in: {0}'.format(results_full_filename))
+    
     # Writting to output file
     try :
         
         file_handler = open(results_full_filename, append_mode)
         if blank_file:
-            head = 'Experiment, Best_Individual, Best_Fit, Best_ConfMatrix'
+            head = 'Experiment,Best_Individual,Best_Fit,Best_ConfMatrix\n'
             file_handler.write(head)
         
         all_best_fit = []
         for exp_num in range(1, len(all_experiments_best_ind)+1):
             ind = all_experiments_best_ind[exp_num-1]
             best_fit = ind.fitness.values[0]
-            line = '{0},{1},{2},{3}'.format(exp_num, ind, ind.fitness.values[0], ind.conf_matrix)
+            ind_without_commas = ' '.join(map(str, np.array(ind)))
+            
+            flatten_cmat =  ' '.join(map(str,np.array(ind.confusion_matrix).flatten()))
+            line = '{0},{1},{2},{3}\n'.format(exp_num, ind_without_commas, ind.fitness.values[0], flatten_cmat)
             file_handler.write(line)
             
             all_best_fit.append(best_fit)
@@ -830,6 +854,68 @@ def saveResultsFile(all_experiments_best_ind):
     except os.error:
         print("\n*** ERROR: file %s can not be written" % results_full_filename)
         exit(1)
+        
+
+    if __VERBOSE: 
+        print('\t Done')        
+    
+    return results_full_filename
+
+def saveDetailedResultsCSVFile(all_experiments_best_ind):
+    global __OUTPUT_DIRECTORY, __DEAP_RUN_ID
+    output_dir_path = build_experiments_output_dir_name()
+    
+    
+    filename = 'detailed_results_{0}_{1}.csv'.format(__DEAP_RUN_ID, __MODEL_NAME)
+    results_full_filename = os.path.join(output_dir_path, filename)
+    
+    append_mode = "a"
+    blank_file = False
+    
+    # checking parameters file
+    if not os.path.exists(results_full_filename):
+        blank_file = True
+        
+        # creates output dir when path doesnt exist
+        if output_dir_path != '' and not os.path.exists(output_dir_path):
+            try:
+                os.makedirs(output_dir_path)
+            except os.error:
+                print ('*** ERROR: Output directory (%s) can not be created\n' % output_dir_path)
+                sys.exit(1)
+        
+    if __VERBOSE: 
+        print('\n* Saving best results of each experiment in: {0}'.format(results_full_filename))
+    
+    # Writting to output file
+    try :
+        
+        file_handler = open(results_full_filename, append_mode)
+        if blank_file:
+            conf_matrix_head = 'true_CN,CN_as_MCI,CN_as_AD,MCI_as_CN,true_MCI,MCI_as_AD,AD_as_CN,AD_as_MCI,true_AD'
+            head = 'Experiment,Body_Plane,First_Slice,Slices_Amount,Best_Fit,' + conf_matrix_head + '\n'
+            file_handler.write(head)
+        
+        all_best_fit = []
+        for exp_num in range(1, len(all_experiments_best_ind)+1):
+            ind = all_experiments_best_ind[exp_num-1]
+            best_fit = ind.fitness.values[0]
+            ind_without_commas = ','.join(map(str, np.array(ind)))
+            flatten_cmat =  ','.join(map(str,np.array(ind.confusion_matrix).flatten()))
+            line = '{0},{1},{2},{3}\n'.format(exp_num, ind_without_commas, ind.fitness.values[0], flatten_cmat)
+            file_handler.write(line)
+            
+            all_best_fit.append(best_fit)
+        file_handler.close()
+            
+    except os.error:
+        print("\n*** ERROR: file %s can not be written" % results_full_filename)
+        exit(1)
+        
+
+    if __VERBOSE: 
+        print('\t Done')        
+    
     return results_full_filename
 
 
@@ -1231,18 +1317,19 @@ def run_deap(all_attribs,
     return best_ind #, best_ind.fitness.values[0], best_ind.confusion_matrix
 
 
-
 # REVISAR!!
 def display_help(script_name=None):
     if script_name == None:
         script_name = os.path.split(sys.argv[0])[1]
-
+    
     print ('Usage:\n    ', script_name, '[Options] -c <csv_file> -d <attributes_dir> ')
     print ('  Options:')
     #print('\t-c, --csv\tADNI csv file which contains images metadata')
     #print('\t-d, --dir\tdirectory which contains all attributes files extracted by get_attribs.py tool')
     print('\t-o, --output_dir\t\tdefines the directory where output files will be saved')
-    print('\t-m, --multicpu\t\t\tenable computation over all cores (default: multicore is off)')
+    print('\t-m, --model\t\t\tmodel used to fit MRI data. Supported models are: ', build_models_names_list())
+    #print('\t\t\t\t\t\t',build_models_names_list())
+    print('\t-p, --parallel\t\t\tenable parallel computation of experiments over all cores (default: parallel is off)')
     print('\t-v, --verbose\t\t\tenables verbose mode (default: disabled)')
     print('\t-n, --number_of_experiments\tnumber of experiments to run with deap (default: 1)')
     print('\t-h, --help\t\t\tdisplays this help screen')
@@ -1254,17 +1341,19 @@ def main(argv):
     csv_file = ''
     attribs_dir = ''
     out_dir = './'
+    model = ''
     seeds_file = ''
     csv_file_ok = False
     attribs_dir_ok = False
     out_dir_ok = False
+    model_ok = False
     seeds_file_ok = False
     verbose_ok = False
     multi_cpu_ok = False
     number_of_experiments = 1
     
     try:
-        opts, args = getopt.getopt(argv[1:],"hc:a:o:s:vmn:",["csv=","attributes_dir=","output_dir=","seeds_file=","verbose","multicpu","number_of_experiments="]) 
+        opts, args = getopt.getopt(argv[1:],"hc:a:o:m:s:vpn:",["csv=","attributes_dir=","output_dir=","model=","seeds_file=","verbose","parallel","number_of_experiments="]) 
     except getopt.GetoptError:
         display_help()
         sys.exit(1)
@@ -1286,7 +1375,7 @@ def main(argv):
             seeds_file_ok = True            
         elif opt in ("-v", "--verbose"):
             verbose_ok = True
-        elif opt in ("-m", "--multicpu"):
+        elif opt in ("-p", "--parallel"):
             multi_cpu_ok = True
         elif opt in ("-n", "--number_of_experiments"):
             try:    
@@ -1294,13 +1383,22 @@ def main(argv):
             except ValueError:
                 print('Error: argument {0} must be a integer!'.format(arg))
                 display_help()
-                sys.exit(0);
+                sys.exit(0)
             except Exception as err:
                 print('Error: An exception has rised on try of integer conversion of the argument {0}.\n\tCause: '.format(arg,err.__cause__))
                 display_help()
-                sys.exit(0);
+                sys.exit(0)
+        elif opt in ("-m", "--model"):
+            if model_name_is_valid(arg):
+                model_ok = True
+                global __MODEL_NAME
+                __MODEL_NAME = arg
+            else:
+                print('Error: argument {0} must be a valid model name!'.format(arg))
+                display_help()
+                sys.exit(0)
     
-    if csv_file_ok and attribs_dir_ok:
+    if csv_file_ok and attribs_dir_ok and model_ok:
             
         print('* Loading data...')
         print('\t* Attribs directory is: {0}'.format(attribs_dir))
@@ -1389,8 +1487,14 @@ def main(argv):
         if __ALARM:
             os.system('play -nq -t alsa synth {} sine {}'.format(__DURATION, __FREQ))
         
-        save_final_result_boxplot(all_experiments_best_ind,[__MODEL_NAME])
+        print('* Saving blotspot using final result... ', end='')
+        bplot_file = save_final_result_boxplot(all_experiments_best_ind,[__MODEL_NAME])
+        print('Done. (file={0}'.format(bplot_file))
         
+        print('* Saving final results... ', end='')
+        #final_results_file = saveResultsCSVFile(all_experiments_best_ind)
+        final_results_file = saveDetailedResultsCSVFile(all_experiments_best_ind)
+        print('Done. (file={0}'.format(final_results_file))
             
         
     else:

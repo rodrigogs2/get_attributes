@@ -8,12 +8,12 @@ Created on Sun Dec  9 15:21:13 2018
 
 import os
 
-def list_files(input_dir,extention=".nii"):
+def list_files(input_dir,extension=".nii"):
     returned_files = []
     dir_files = os.listdir(input_dir)
     for filename in dir_files:
         name,ext = os.path.splitext(filename)
-        if ext == extention:
+        if ext == extension:
             full_filename = os.path.join(input_dir,filename)
             #print(full_filename)
             if os.path.isfile(full_filename):
@@ -21,12 +21,12 @@ def list_files(input_dir,extention=".nii"):
         
     return returned_files
 
-def new_list_files(input_dir,extention=".nii"):
+def new_list_files(input_dir,extension=".nii"):
     returned_files = []
     for root, dirs, files in os.walk(input_dir,topdown=False):
         for filename in files:
             name,ext = os.path.splitext(filename)
-            if ext == extention:
+            if ext == extension:
                 full_filename = os.path.join(root,filename)
                 #print(full_filename)
                 if os.path.isfile(full_filename):
