@@ -15,10 +15,12 @@ import matplotlib.image as im
 from nibabel.testing import data_path
 from PIL import Image
 
-filename = 'example4d.nii.gz'
+#filename = 'example4d.nii.gz'
+
+#'ADNI_002_S_0413_MR_MPR____N3__Scaled_2_Br_20081124142730828_S22683_I128346.nii'
 adni_filename = 'ADNI_136_S_0184_MR_MPR____N3__Scaled_Br_20090708094745554_S64785_I148265.nii'
 
-adni_file_data_path = '/home/rodrigo/Downloads'
+adni_file_data_path = '/home/rodrigo/Documentos/_phd/Nii_files'
 
 example_full_filename = os.path.join(data_path, filename)
 adni_full_filename = os.path.join(adni_file_data_path, adni_filename)

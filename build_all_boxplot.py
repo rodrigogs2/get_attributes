@@ -34,8 +34,8 @@ def build_all_boxplot_using_pandas(all_models_results_csv_file):
     
     
 
-
-file = '/home/rodrigo/bin/full_run_global_results.csv'
+dir_path ='/home/rodrigo/Documentos/_phd/git/results/results_removing_blacklisted_images/all_run_2019-06-10_Males/'
+file = os.path.join(dir_path, 'all_results.csv')
 
 #build_all_bloxplot(file)
 

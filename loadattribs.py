@@ -124,13 +124,27 @@ def build_cvs_dictionary(csv_file):
         raise ValueError(message)
     return demographics_dictionary
 
+
+def get_image_ID(attributes_filename):
+    all_image_id = re.findall(r'I[0-9]+',attributes_filename) # returns a array with all regular exp matches
+    if len(all_image_id) > 0:
+        return all_image_id[0]
+    else:
+        return ''
+   
+
 def get_image_demographic_data(attributes_filename, demographics_dictionary):
-    image_id = re.findall(r'I[0-9]+',attributes_filename) # returns a array with all regular exp matches
+    #image_id = re.findall(r'I[0-9]+',attributes_filename) # returns a array with all regular exp matches
+    image_id = get_image_ID(attributes_filename)
     
-    if len(image_id) > 0: # if there is at least one match...
-        subject_class_gender_sex = demographics_dictionary[image_id[0]] # pick up demographics for the first
+    if image_id != '':
+        subject_class_gender_sex = demographics_dictionary[image_id] # pick up demographics for the first
     else:
         raise ValueError('There aren\'t image IDs in this attributes filename ({0})'.format(attributes_filename))
+#    if len(image_id) > 0: # if there is at least one match...
+#        subject_class_gender_sex = demographics_dictionary[image_id[0]] # pick up demographics for the first
+#    else:
+#        raise ValueError('There aren\'t image IDs in this attributes filename ({0})'.format(attributes_filename))
 
     return subject_class_gender_sex
 
@@ -171,18 +185,21 @@ def load_all_data(attributes_dir, csv_file):
     
     return all_attribs, all_body_planes, all_slice_num, all_slice_amounts, array_all_classes, all_genders, array_all_ages, image_id_dictionary
 
-    # getting partition from 80 to 100th slice from the f-th (f=0) attribs file
-    #partition = get_attributes_from_a_range_of_slices(attribs,slice_amounts,p,fs,ls)
-    #print('\n-Shape of Attributes Partition of the {0}th data file from the slices {2} and {3}: {1}'.format(f,partition.shape,fs,ls))
+
+def is_black_listed(image_ID, black_list_id=[]):
+    black_listed = False
+    if len(black_list_id) > 0:
+        try:
+            position = black_list_id.index(image_ID)
+            if position >= 0:
+                black_listed = True
+        except ValueError:
+            black_listed = False
+    return black_listed
+        
+
     
-    #first = fs
-    #for at in partition:
-    #    print('\n-Attributes from {1}th slice of the {2}th attribs file:\n{0}'.format(at,first,f))
-    #    first = first + 1
-    
-    #print('\nPartition:\n{0}'.format(partition))
-    
-def load_all_data_using_filters(attributes_dir, csv_file, valid_genders=['M','F'], min_age=0.0, max_age=200.0, debug=False):
+def load_all_data_using_filters(attributes_dir, csv_file, valid_genders=['M','F'], min_age=0.0, max_age=200.0, debug=False, black_list_id=[]):
     all_attribs = []
     all_body_planes = []
     all_slice_num = []
@@ -196,46 +213,58 @@ def load_all_data_using_filters(attributes_dir, csv_file, valid_genders=['M','F'
     # Getting all attributes files from attributes directory
     attribs_files = list_dir.list_files(attributes_dir,".txt")
     
+    print('black_list_id=',black_list_id)
+    
     # Loop which loads attributes, demographics values and slicing info
     for file in attribs_files:
-        if debug: print('\t* extracting data from file:',file)
-        demographics_data = get_image_demographic_data(file,image_id_dictionary)
-        if debug: print('\t* this file demographics: ',demographics_data)
-        gender = demographics_data['gender']
-        if debug: print('\t* gender loaded: ',gender)
-        age = demographics_data['age']
-        if debug: print('\t* age loaded: ', age)
-        
-        age_is_valid = age >= min_age and age <= max_age
-        if debug: print('\t* age_is_valid: ', age_is_valid)
-        
+        image_id = get_image_ID(file)
         try:
-            if valid_genders.index(gender) >= 0:
-                gender_is_valid = True
+            black_list_id.index(image_id)
+            print('attributes from image_id=\'{0}\' was not loaded because it is blacklisted!'.format(image_id))
+            #continue # if image_id was found in blacklist, skip current iteration
         except ValueError:
-            gender_is_valid = False
             
-        if debug: print('gender_is_valid: ',gender_is_valid)
-        
-        if gender_is_valid and age_is_valid:
-            if debug: print('Great! Both gender and age are valid!')
-            attribs,body_plane,slice_num,slice_amounts = load_attribs_and_metadata(file)
-            
-            all_attribs.append(attribs)
-            all_body_planes.append(body_plane)
-            all_slice_num.append(slice_num)
-            all_slice_amounts.append(slice_amounts)  
-        
+            # image ID was not found in blacklist so we can extract attributes from this volume
+            if debug: print('\t* extracting data from file:',file)
             demographics_data = get_image_demographic_data(file,image_id_dictionary)
+            if debug: print('\t* this file demographics: ',demographics_data)
+            gender = demographics_data['gender']
+            if debug: print('\t* gender loaded: ',gender)
+            age = demographics_data['age']
+            if debug: print('\t* age loaded: ', age)
             
-            image_class = demographics_data['class']
-
-            all_classes.append(image_class)
-            all_genders.append(gender)
-            all_ages.append(float(age))
+            age_is_valid = age >= min_age and age <= max_age
+            if debug: print('\t* age_is_valid: ', age_is_valid)
+            
+            try:
+                if valid_genders.index(gender) >= 0:
+                    gender_is_valid = True
+            except ValueError:
+                gender_is_valid = False
+                
+            if debug: print('gender_is_valid: ',gender_is_valid)
+            
+            if gender_is_valid and age_is_valid:
+                if debug: print('Great! Both gender and age are valid!')
+                attribs,body_plane,slice_num,slice_amounts = load_attribs_and_metadata(file)
+                
+                all_attribs.append(attribs)
+                all_body_planes.append(body_plane)
+                all_slice_num.append(slice_num)
+                all_slice_amounts.append(slice_amounts)  
+            
+                demographics_data = get_image_demographic_data(file,image_id_dictionary)
+                
+                image_class = demographics_data['class']
+    
+                all_classes.append(image_class)
+                all_genders.append(gender)
+                all_ages.append(float(age))
         
     array_all_classes = np.array(all_classes, dtype=np.int64)
     array_all_ages = np.array(all_ages, dtype=np.int64)
+    
+    print('*** {0:04d} attributes files were analysed and {1:04d} atributes were extracted'.format(len(attribs_files),len(all_genders)))
     
     return all_attribs, all_body_planes, all_slice_num, all_slice_amounts, array_all_classes, all_genders, array_all_ages, image_id_dictionary
 
@@ -415,15 +444,16 @@ def main(argv):
     ## Testting area
     
     # Use this arguments to set the input directory of attributes files
-    attributes_dir = "../../attributes_amostra/"
+    #attributes_dir = "../../attributes_amostra/"
+    attributes_dir = "../../attributes2/"
     csv_file = './ADNI1_Complete_All_Yr_3T.csv' 
     # Getting all files
     
     print('* Loading all attributes data...')
-    all_attribs, body_planes, slice_num, slice_amounts, output_classes, all_genders, all_ages, demographics_dic = load_all_data_using_filters(attributes_dir, csv_file)
+    all_attribs, body_planes, slice_num, slice_amounts, output_classes, all_genders, all_ages, demographics_dic = load_all_data_using_filters(attributes_dir, csv_file, black_list_id=['I288905'])
     print('* ...done')
     
-    print('all_attribs=',all_attribs)
+    #print('all_attribs=',all_attribs)
     print('len(all_attribs)=',len(all_attribs))
     print('body_planes=',len(body_planes))
     print('len(slice_num)=',len(slice_num))

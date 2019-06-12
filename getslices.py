@@ -15,6 +15,8 @@ import mahotas as mh
 
 import imageio as iio
 import matplotlib.pyplot as plt
+
+import list_dir
 #import matplotlib.image as im
 #from nibabel.testing import data_path 
 #from PIL import Image
@@ -112,44 +114,7 @@ def build_txt_filename_from_3d_image(input_full_filename, output_directory=None)
     return txt_full_filename
     
     
-def save_slice_as_png(nii_img_full_filename, slicenum, axisnum, output_directory, show_image=False):
-    
-    # build filename structure
-    if not os.path.exists(nii_img_full_filename):
-        raise ValueError("*** ERROR: input nii image filename not exist or can not be readed")
-        exit(1)
-    
-    input_file_dir,input_filename = os.path.split(nii_img_full_filename)
-    
-    if output_directory == None:
-        # Use input file dir as output when output dir is None
-        output_directory = input_file_dir
-    elif not os.path.exists(output_directory):
-        # create the output dir whether it doesnt exist
-        try:
-            os.makedirs(output_directory)
-        except os.error:
-            print ('*** ERROR: Output directory (%s) can not be created\n' % output_directory)
-            sys.exit(1)
-    
-    nii_img = nb.load(nii_img_full_filename)
-    nii_img_data = nii_img.get_fdata()
-    # Get a slice and show it
-    
-    img_slice = get_slice_data(nii_img_data, slicenum, axisnum)
-    
-    # Show image
-    if show_image:
-        plt.imshow(img_slice,cmap="gray",origin="lower")
-        #plt.show(img_slice)
-        plt.show()
-    
-    # Normalization
-    max_value = img_slice.max()
-    if max_value != 0:
-        img_slice = img_slice / max_value
-    img_slice = img_slice * 255;
-    img_slice_uint8 = img_slice.astype(np.uint8)
+def save_slice_as_png(nii_img_full_filename, slicenum, axisnum, output_directory, show_image=False, overwrite=False):
     
     # saving png file
     png_full_filename = build_png_filename_from_slice(nii_img_full_filename,
@@ -157,7 +122,52 @@ def save_slice_as_png(nii_img_full_filename, slicenum, axisnum, output_directory
                                                       slicenum,
                                                       output_directory)
     
-    iio.imwrite(png_full_filename,img_slice_uint8)
+    if overwrite or not os.path.exists(png_full_filename):
+        # build filename structure
+        if not os.path.exists(nii_img_full_filename):
+            raise ValueError("*** ERROR: input nii image filename not exist or can not be readed: {0}".format(nii_img_full_filename))
+            exit(1)
+        
+        input_file_dir,input_filename = os.path.split(nii_img_full_filename)
+        
+        if output_directory == None:
+            # Use input file dir as output when output dir is None
+            output_directory = input_file_dir
+        elif not os.path.exists(output_directory):
+            # create the output dir whether it doesnt exist
+            try:
+                os.makedirs(output_directory)
+            except os.error:
+                print ('*** ERROR: Output directory (%s) can not be created\n' % output_directory)
+                sys.exit(1)
+        
+        nii_img = nb.load(nii_img_full_filename)
+        nii_img_data = nii_img.get_fdata()
+        # Get a slice and show it
+        
+        img_slice = get_slice_data(nii_img_data, slicenum, axisnum)
+        
+        # Show image
+        if show_image:
+            plt.imshow(img_slice,cmap="gray",origin="lower")
+            #plt.show(img_slice)
+            plt.show()
+        
+        # Normalization
+        max_value = img_slice.max()
+        if max_value != 0:
+            img_slice = img_slice / max_value
+        img_slice = img_slice * 255;
+        img_slice_uint8 = img_slice.astype(np.uint8)
+        
+        # saving png file
+        png_full_filename = build_png_filename_from_slice(nii_img_full_filename,
+                                                          axisnum,
+                                                          slicenum,
+                                                          output_directory)
+        
+        iio.imwrite(png_full_filename,img_slice_uint8)
+    
     
     return png_full_filename
 
@@ -251,7 +261,8 @@ def extract_slices_as_png(nii_img_full_filename,
     
     nii_img = nb.load(nii_img_full_filename)
     
-    total_used_axis = 3
+    total_used_axis = len(nii_img.shape())
+    #total_used_axis = 3
     
     # Testing if output file should be removed
     if reset_output_file:
@@ -361,23 +372,33 @@ def extract_all_slices_to_png_files(nii_filename,axis=None,output_path=None):
 """
 
 # Temporary Variables (should be removed later)
-img_data_shape = ''
-input_full_filename = '/home/rodrigo/Downloads/ADNI_136_S_0184_MR_MPR____N3__Scaled_Br_20090708094745554_S64785_I148265.nii'
-input_filepath,input_filename = os.path.split(input_full_filename)
-input_filename_without_extension = os.path.splitext(input_filename)[0] 
+#img_data_shape = ''
+#input_full_filename = '/home/rodrigo/Downloads/ADNI_136_S_0184_MR_MPR____N3__Scaled_Br_20090708094745554_S64785_I148265.nii'
+#input_filepath,input_filename = os.path.split(input_full_filename)
+#input_filename_without_extension = os.path.splitext(input_filename)[0] 
+
+bplane = 2
+slicenum = 150
+
+input_dir = '../../Nii_files/'
+output_dir = '../extracted_slices_BP{0}_SLICE{1}'.format(bplane,slicenum)
+
+#fake_output_dir = '/home/rodrigo/Downloads/fake_output_dir2/'
+#built_png_filename = build_png_filename_from_slice(input_full_filename, 0, 80, fake_output_dir)
+
+print('*** input_dir=', input_dir)
+print('*** output_dir=', output_dir)
 
 
-fake_output_dir = '/home/rodrigo/Downloads/fake_output_dir2/'
-built_png_filename = build_png_filename_from_slice(input_full_filename, 0, 80, fake_output_dir)
+mri_volumes_files = list_dir.new_list_files(input_dir,extension='.nii')
+print('len(mri_volumes_files)=',len(mri_volumes_files))
 
-print  ('*** input_file_path=', input_filepath,
-      '\n*** input_filename=', input_filename,
-      '\n*** input filename without extension=', input_filename_without_extension,
-      '\n*** output png filename=', built_png_filename)
+for mri_volume in mri_volumes_files:
+        save_slice_as_png(mri_volume,slicenum,bplane,output_dir)
+        print('.',end='')
 
-save_slice_as_png(input_full_filename,130,1,fake_output_dir)
 
-extract_slices_as_png(input_full_filename,fake_output_dir,verbose=True)
+#extract_slices_as_png(input_full_filename,fake_output_dir,verbose=True)
 
 #img = nb.load(input_full_filename)
 #img_data = img.get_fdata()

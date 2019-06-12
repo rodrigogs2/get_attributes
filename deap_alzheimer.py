@@ -88,10 +88,14 @@ def build_models_dictionary(knn_k_value=3,lr_solver='sag',lr_multiclass='ovr'):
 #global __TOURNEAMENT_SIZE, __MUTATE_INDP, __CROSSOVER_INDP, __NUMBER_OF_GENERATIONS, __POPULATION_SIZE, __DEFAULT_TARGET_FITNESS, __DEFAULT_WORST_FITNESS
 
 # Data Cohort
-__VALID_GENDERS = ['F'] #['M','F']
+__VALID_GENDERS = ['F']#['M','F']
 __MIN_AGE = 0.0
 __MAX_AGE = 200.0
 
+
+# Image Black List
+#BLACK_LIST_ID = []
+__BLACK_LIST_ID = ['I288905','I288906','I120446','I120441','I120426','I120436','I120423','I120416']
 
 # Slicing Arguments
 __ALL_ATTRIBS = []
@@ -655,9 +659,14 @@ def build_parameters_string(max_consecutive_slices,number_of_groupings):
     
     # DATA COHORT
     strPool.append('\n# Data Cohort parameters\n')
-    strPool.append('__VALID_GENDERS = '.format(__VALID_GENDERS))
-    strPool.append('__MIN_AGE = '.format(__MIN_AGE))
-    strPool.append('__MAX_AGE = '.format(__MAX_AGE))
+    strPool.append('__VALID_GENDERS = {0}\n'.format(__VALID_GENDERS))
+    strPool.append('__MIN_AGE = {0}\n'.format(__MIN_AGE))
+    strPool.append('__MAX_AGE = {0}\n'.format(__MAX_AGE))
+    
+    # BLACKLIST
+    global __BLACK_LIST_ID
+    strPool.append('\n# Images Black List\n')
+    strPool.append('__BLACK_LIST_ID = {0}\n'.format(__BLACK_LIST_ID))
     
     # Runtime parameters    
     global __DEAP_RUN_ID, __MULTI_CPU_USAGE, __OUTPUT_DIRECTORY, __VERBOSE, __CORES_NUM
@@ -1431,7 +1440,7 @@ def main(argv):
         # Loading all data just once
         global __VALID_GENDERS, __MAX_AGE, __MIN_AGE
         
-        all_attribs, all_body_planes, all_slice_num, all_slice_amounts, all_output_classes, all_genders, all_ages, demographics_dic = loadattribs.load_all_data_using_filters(attribs_dir, csv_file, valid_genders=__VALID_GENDERS, max_age=__MAX_AGE, min_age=__MIN_AGE)
+        all_attribs, all_body_planes, all_slice_num, all_slice_amounts, all_output_classes, all_genders, all_ages, demographics_dic = loadattribs.load_all_data_using_filters(attribs_dir, csv_file, valid_genders=__VALID_GENDERS, max_age=__MAX_AGE, min_age=__MIN_AGE, black_list_id=__BLACK_LIST_ID)
         
         #max_slice_values = loadattribs.getSliceLimits(all_slice_num)
         max_consecutive_slices = __DEFAULT_MAX_CONSEC_SLICES
