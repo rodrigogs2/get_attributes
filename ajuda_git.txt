@@ -1,5 +1,11 @@
 Ajuda Git (mais detalhes em: http://rogerdudler.github.io/git-guide/index.pt_BR.html)
 
+ATUALIZAR LISTA DE BRANCHES
+    git fetch
+
+LISTAR BRANCHES EXISTENTES
+    git branch -a
+
 ADICIONAR E CONFIRMAR MUDANÇAS
 
 -Propor modificações (adicioná-las ao INDEX):
@@ -45,6 +51,15 @@ RAMIFICANDO
     git push origin <funcionalidade_x>
     
 
+
+MESCLANDO BRANCHES
+
+-Como mesclar um branch em outro:
+
+    git checkout a (you will switch to branch a)
+    git merge b (this will merge all changes from branch b into branch a)
+    git commit -a (this will commit your changes)
+    
 ATUALIZANDO E MESCLANDO (versões local e remota)
 
 -Se algum branch criado anteriormente (funcionalidade_x) para implementar alguma nova funcionalidade 
@@ -73,7 +88,7 @@ na sua pasta de trabalho para obter e fazer merge (mesclar) alterações remotas
     git merge <branch>
 em ambos os casos o git tenta fazer o merge das alterações automaticamente. 
 Infelizmente, isto nem sempre é possível e resulta em conflitos. 
-Você é responsável por fazer o merge estes conflitos manualmente editando os arquivos exibidos pelo git. 
+Você é responsável por fazer resolver estes conflitos manualmente editando os arquivos exibidos pelo git. 
 
 Depois de alterar, você precisa marcá-los como merged com
     git add <arquivo>
