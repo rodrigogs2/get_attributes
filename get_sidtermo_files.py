@@ -31,7 +31,7 @@ def get_body_plane_and_slice_nums(png_filename):
 
 
 
-def list_all_files(input_dir, body_plane, min_slice, max_slice, extension=".png"):
+def list_all_image_files(input_dir, body_plane, min_slice, max_slice, extension=".png"):
     returned_files = []
     
     for root, dirs, files in os.walk(input_dir,topdown=False):
@@ -150,9 +150,41 @@ def main(argv):
             print ('Last slice is: ', first_slice + total_slices - 1)
             print ('\nEverything looks fine... lets go!')
         
-        image_demographics_data_dic = loadattribs.build_cvs_dictionary(csv_file)
+        image_id_dic = loadattribs.build_cvs_dictionary(csv_file)
         
-        all_image_files = list_all_files(inputdir, body_plane, first_slice, first_slice + total_slices, extension=".png")
+        all_image_filenames = list_all_image_files(inputdir, body_plane, first_slice, first_slice + total_slices, extension=".png")
+        
+        all_classes = []
+        for filename in all_image_filenames:
+            demographics_data = loadattribs.get_image_demographic_data(filename,image_id_dic)
+            image_class = demographics_data['class']
+            all_classes.append(image_class)
+        
+        unique_class_found = set(all_classes)
+        all_dir_names = []
+        
+        for class_id in unique_class_found:
+            dir_name = str(outputdir) + '/class_' + str(class_id)
+            all_dir_names.append(dir_name)
+
+        if verbose_ok:
+            
+            
+            for dir_name in all_dir_names:
+                print('New subdir: ', dir_name)
+            
+            print ('Total 2D slices found: ', len(all_image_filenames))
+            print ('All classes found: ', unique_class_found)
+            print('Class from all slices found: ', all_classes )
+        
+        for index in range(len(all_image_filenames)):
+            filename = all_image_filenames[index]
+            image_class = all_classes[index]
+            
+            target_dir = all_dir_names[int(image_class)]
+            print('Target dir: ', target_dir)
+            
+            
         
         #loadattribs.load_all_data(attribs_dir, csv_file)
         #extract_attributes(input_path=inputdir,
