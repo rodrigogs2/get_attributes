@@ -22,7 +22,7 @@ def build_all_boxplot_using_pandas(all_models_results_csv_file):
     fig = plt.figure()
     
     df = pd.read_csv(all_models_results_csv_file)
-    bplot = df.drop('Exp',axis=1).boxplot()
+    bplot = df.drop('Exp',axis=1).boxplot(rot=70,fontsize=12)
     
     fig.savefig(output_bplot_full_filename)
 #    
@@ -33,11 +33,15 @@ def build_all_boxplot_using_pandas(all_models_results_csv_file):
     print(df)
     
     
+#dir_path = '/home/rodrigo/Documentos/_phd/git/results/results_removing_blacklisted_images/all_run_2019-06-10_Both_Males_and_Females/'
+#dir_path ='/home/rodrigo/Documentos/_phd/git/results/results_removing_blacklisted_images/all_run_2019-06-10_Females/'
 
-dir_path ='/home/rodrigo/Documentos/_phd/git/results/results_removing_blacklisted_images/all_run_2019-06-10_Males/'
-file = os.path.join(dir_path, 'all_results.csv')
+dir_path = '/home/rodrigo/Documentos/_phd/git/results/results_keeping_blacklisted_images/'
+dir_path2 = '/home/rodrigo/Documentos/_phd/git/results/results_removing_blacklisted_images/'
 
-#build_all_bloxplot(file)
-
+file = os.path.join(dir_path, 'all_cohorts_results.csv')
 build_all_boxplot_using_pandas(file)
-    
+
+file = os.path.join(dir_path2, 'all_cohorts_results.csv')
+build_all_boxplot_using_pandas(file)
+

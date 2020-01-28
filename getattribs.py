@@ -78,7 +78,7 @@ def save_image_2d_data_as_png_file(img_data, filename, output):
         raise ValueError("Fail to write image 2d data to png file (%s)",filename)
         
 
-def build_png_filename_from_slice(input_full_filename, axisnum=0, slicenum=0, output_directory=None):
+def build_png_filename_from_slice(input_full_filename, axisnum=0, slicenum=0, output_directory=None,only_extract_slices=False):
     # splitting file and directory from input full filename
     input_file_dir,input_filename = os.path.split(input_full_filename)
 
@@ -86,25 +86,29 @@ def build_png_filename_from_slice(input_full_filename, axisnum=0, slicenum=0, ou
     input_filename_without_extension = os.path.splitext(input_filename)[0]
     
     # putting png extension to output file
-    output_filename = "%s-A%.3d-S%.3d.png" % (
-            input_filename_without_extension, 
+    output_filename = "Axis%.3d-Slice%.3d-%s.png" % (
             axisnum, 
-            slicenum)
+            slicenum,
+            input_filename_without_extension)
+    
     
     png_full_filename = os.path.join(output_directory, output_filename)
     
     # ENDED    
     return png_full_filename
 
-def build_txt_filename_from_3d_image(input_full_filename, output_directory=None):
+def build_txt_filename_from_3d_image(input_image_full_filename, output_directory=None,only_extract_slices=False):
     # splitting file and directory from input full filename
-    input_file_dir,input_filename = os.path.split(input_full_filename)
+    input_file_dir,input_filename = os.path.split(input_image_full_filename)
 
     # removing extetion from input file
     input_filename_without_extension = os.path.splitext(input_filename)[0]
     
     # putting txt extension to output file
-    output_filename = "%s.txt" % input_filename_without_extension
+    if only_extract_slices:
+        output_filename = input_filename_without_extension
+    else:
+        output_filename = "%s.txt" % input_filename_without_extension
     
     txt_full_filename = os.path.join(output_directory, output_filename)
     
@@ -156,7 +160,8 @@ def save_slice_as_png(nii_img_full_filename, slicenum, axisnum, output_directory
     if output_directory == None:
         # Use input file dir as output when output dir is None
         output_directory = input_file_dir
-    elif not os.path.exists(output_directory):
+        
+    if not os.path.exists(output_directory):
         # create the output dir whether it doesnt exist
         try:
             os.makedirs(output_directory)
@@ -288,7 +293,8 @@ def extract_attributes_from_file(nii_img_full_filename,
                           verbose=False,
                           reset_output_file=True,
                           limit_precision=True,
-                          testing=False):
+                          testing=False,
+                          only_extract_slices=False):
     
     nii_img = nb.load(nii_img_full_filename)
     
@@ -305,20 +311,27 @@ def extract_attributes_from_file(nii_img_full_filename,
     #for size in all_axis:
         #slices_to_extract = slices_to_extract + size
     
-    # Building correct filename for txt output file
-    txt_file = build_txt_filename_from_3d_image(
-                nii_img_full_filename,output_directory)
+    txt_file = "file.txt"
     
-    if verbose:
-        print("    Output file will be: %s" % txt_file)
+    if not only_extract_slices:
+        
+        # Building correct filename for txt output file
+        txt_file = build_txt_filename_from_3d_image(
+                    nii_img_full_filename,output_directory)
+        
+        if verbose:
+            print("    Output file will be: %s" % txt_file)
     
-    # Testing if output file should be removed
-    if reset_output_file:
-        if os.path.exists(txt_file):
-            try:
-                os.remove(txt_file)
-            except os.error:
-                raise ValueError("*** File %s already exists but can not be removed.", txt_file)
+        # Testing if output file should be removed
+        if reset_output_file:
+            if os.path.exists(txt_file):
+                try:
+                    os.remove(txt_file)
+                except os.error:
+                    raise ValueError("*** File %s already exists but can not be removed.", txt_file)
+    else:
+        # Creates a subfolder from each nii input to save their slices
+        output_directory = build_txt_filename_from_3d_image(nii_img_full_filename, output_directory, only_extract_slices=only_extract_slices)
     
     if not os.path.exists(txt_file): # run extraction only when outputfile doesn't exist
         
@@ -338,17 +351,21 @@ def extract_attributes_from_file(nii_img_full_filename,
                 for slice_number in range(total_slices): # picking a valid slice
                     saved_png_full_filename = save_slice_as_png(nii_img_full_filename, slice_number, axis_number, output_directory)
                
-                    # getting image attributes (zernick pm and haralick stats)
-                    attribs = get_attributes(saved_png_full_filename)
                     
-                    # appending attributes to txt file
-                    append_attributes_to_file(nii_img_full_filename, attribs, axis_number, slice_number, output_directory)
+                    if not only_extract_slices:
+                        # getting image attributes (zernick pm and haralick stats)
+                        attribs = get_attributes(saved_png_full_filename)
+                    
+                        # appending attributes to txt file
+                        append_attributes_to_file(nii_img_full_filename, attribs, axis_number, slice_number, output_directory)
                 
                     # verbose print
                     if verbose==True:
                         print("Getting slice ", slice_number, "inside body axis " , axis_number)
                         print("\nAttributes (slice=%s,axis=%s): " % (slice_number, axis_number))
-                        print(attribs)
+                        
+                        if not only_extract_slices:
+                            print(attribs)
                     #else:
                         #print('.', end='')
                 
@@ -400,7 +417,8 @@ def extract_attributes_from_dir(input_directory,
                                 verbose=False,
                                 reset_output_file=True,
                                 limit_precision=True,
-                                multi_cpu=False):
+                                multi_cpu=False,
+                                only_extract_slices=False):
 
     files = list_files(input_directory,".nii")
     
@@ -416,7 +434,8 @@ def extract_attributes_from_dir(input_directory,
                                          #extract_attributes,
                                          verbose,
                                          reset_output_file,
-                                         limit_precision)
+                                         limit_precision,
+                                         only_extract_slices)
     else:
         cores_num = multiprocessing.cpu_count()
         with Pool(cores_num) as p:
@@ -427,7 +446,8 @@ def extract_attributes_from_dir(input_directory,
                            keep_png_cache_files=keep_png_cache_files,
                            verbose=verbose,
                            reset_output_file=reset_output_file,
-                           limit_precision=limit_precision), 
+                           limit_precision=limit_precision,
+                           only_extract_slices=only_extract_slices), 
                 files)
 
         
@@ -439,7 +459,8 @@ def extract_attributes(input_path,
                        verbose=False,
                        reset_output_file=True,
                        limit_precision=True,
-                       multi_cpu=False):
+                       multi_cpu=False,
+                       only_extract_slices=False):
     
     if os.path.exists(input_path):
         
@@ -452,7 +473,8 @@ def extract_attributes(input_path,
                                         verbose,
                                         reset_output_file,
                                         limit_precision,
-                                        multi_cpu)
+                                        multi_cpu,
+                                        only_extract_slices)
         # Code when input path is a single file
         else:
             extract_attributes_from_file(input_path,
@@ -461,7 +483,8 @@ def extract_attributes(input_path,
                                         #extract_attributes, 
                                         verbose,
                                         reset_output_file,
-                                        limit_precision)                                        
+                                        limit_precision,
+                                        only_extract_slices)                                        
 
 def display_help(script_name=None):
     if script_name == None:
@@ -473,6 +496,7 @@ def display_help(script_name=None):
     print('\t-v, --verbose\tenables verbose mode (default: disabled)')
     print('\t-r, --resume\tresume extraction: output files are not overwritten (default: resume is off)')
     print('\t-k, --keep_png\ttemporary png files extracted from MRI volume slices are not deleted (default: keep_png is False)')
+    print('\t-s, --only_extract_slices\tattributes from slices are not extracted (default: only_extract_slices is False). Implies --keep_png=True')
 
 def main(argv):
     
@@ -485,8 +509,10 @@ def main(argv):
     reset_txt_file_ok = True
     keep_temporary_png = False
     
+    only_extract_slices = False # If this is True, keep_temporary_png will be True
+    
     try:
-        opts, args = getopt.getopt(argv[1:],"hi:o:vmrk",["ifile=","odir=","verbose","multicpu","reset_output_file","keep_png"]) 
+        opts, args = getopt.getopt(argv[1:],"hi:o:vmrks",["ifile=","odir=","verbose","multicpu","reset_output_file","keep_png","only_extract_slices"]) 
     except getopt.GetoptError:
         display_help()
         sys.exit(1)
@@ -508,6 +534,10 @@ def main(argv):
             reset_txt_file_ok = False
         elif opt in ("-k","--keep_png"):
             keep_temporary_png = True
+        elif opt in ("-s","--only_extract_slices"):
+            keep_temporary_png = True
+            only_extract_slices = True
+            
     
     if ifile_ok and ofile_ok:
         print ('Output directory is: ', outputdir)
@@ -520,7 +550,7 @@ def main(argv):
                            verbose=verbose_ok,
                            multi_cpu=multi_cpu_ok,
                            reset_output_file=reset_txt_file_ok,
-                           )
+                           only_extract_slices=only_extract_slices)
         
     else:
         display_help()
