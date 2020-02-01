@@ -13,7 +13,7 @@ step_size = 2
 max_row = 70
 
 def get_reference_img_index(attributes_filename, csv_file, axis_num=0):
-    
+    print('')    
 
 
 def load_IDs_and_ref_img_from_axis(csv_file, axis_num=0):
@@ -85,10 +85,10 @@ def load_IDs_and_ref_img_from_axis(csv_file, axis_num=0):
 #    # NumPy transformations
     #attribs = np.array(attribs_as_floats_lists, dtype=np.float64)
     #image_ids = np.array(image_id_list, dtype=np.int64)
-    #slice_numbers = np.array(slicenum_list, dtype=np.int64)
+    ref_slices = np.array(slicenum_list, dtype=np.int64)
     #slice_amount = np.array(slice_amount_per_plane, dtype=np.int64)
     
-    return  image_id_list, slicenum_list
+    return  image_id_list, ref_slices
     #return  attribs, slice_numbers, slice_amount
     
 
@@ -100,6 +100,10 @@ def main(argv):
     for img_id, slice_num in zip(ids,slices):
         print(str(img_id) + "\t\t" + str(slice_num))
     
+    print('Min slice: ' + str(np.min(slices)) )
+    print('Max slice: ' + str(np.max(slices)) )
+    print('Average value: ' + str(np.average(slices)) )
+    print('Standard Deviation: ' + str(np.std(slices)) )
 
 if __name__ == "__main__":    
     main(sys.argv)
