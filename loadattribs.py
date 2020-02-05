@@ -101,11 +101,12 @@ def build_cvs_dictionary(csv_file):
             with open(csv_file, 'r') as file:
                 #print('CSV File received: ', csv_file)
                 reader = csv.reader(file)
-                headers = next(reader) 
+                next(reader) 
                 for row in reader:
                     image_id = 'I' + row[3]
                     gender = row[6]
                     age = row[7]
+                    ref_slices = [row[19],row[20],row[21]]
                     
                     try:
                         age = int(age)
@@ -114,7 +115,7 @@ def build_cvs_dictionary(csv_file):
                         
                     
                     image_class = alzheimer_dic[row[5]]
-                    dic = {'class':image_class, 'gender':gender, 'age':age}
+                    dic = {'class':image_class, 'gender':gender, 'age':age, 'ref_slices':ref_slices}
                     demographics_dictionary[image_id] = dic
         except os.error:
             print("*** ERROR: The csv file %s can not be readed (os.error in build_classes_dictionary)" % csv_file)    
@@ -132,13 +133,22 @@ def get_image_ID(attributes_filename):
     else:
         return ''
    
+def get_image_demographic_data_by_id(img_id, demographics_dictionary):
+    try:
+        subject_class_gender_sex_refslices = demographics_dictionary[img_id] # pick up demographics for the first
+    except ValueError:
+        print('There aren\'t image with this ID ({0})'.format(img_id))
+        
+    return subject_class_gender_sex_refslices
+
 
 def get_image_demographic_data(attributes_filename, demographics_dictionary):
     #image_id = re.findall(r'I[0-9]+',attributes_filename) # returns a array with all regular exp matches
     image_id = get_image_ID(attributes_filename)
     
     if image_id != '':
-        subject_class_gender_sex = demographics_dictionary[image_id] # pick up demographics for the first
+        #subject_class_gender_sex = demographics_dictionary[image_id] # pick up demographics for the first
+        subject_class_gender_sex_refslices = get_image_demographic_data_by_id(image_id, demographics_dictionary)
     else:
         raise ValueError('There aren\'t image IDs in this attributes filename ({0})'.format(attributes_filename))
 #    if len(image_id) > 0: # if there is at least one match...
@@ -146,7 +156,7 @@ def get_image_demographic_data(attributes_filename, demographics_dictionary):
 #    else:
 #        raise ValueError('There aren\'t image IDs in this attributes filename ({0})'.format(attributes_filename))
 
-    return subject_class_gender_sex
+    return subject_class_gender_sex_refslices
 
                     
 def load_all_data(attributes_dir, csv_file):

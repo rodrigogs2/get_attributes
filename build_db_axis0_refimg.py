@@ -16,7 +16,8 @@ input_csv = "./com_OFFSET_ADNI1_Complete_All_Yr_3T.csv"
 
 #max_row = 70
 
-def build_csv_dictionary(csv_file):
+# OK
+def build_csv_dictionary2(csv_file):
     alzheimer_dic = {'CN': 0, 'MCI': 1, 'AD': 2}
     demographics_dictionary = {}
 
@@ -51,20 +52,32 @@ def build_csv_dictionary(csv_file):
         raise ValueError(message)
     return demographics_dictionary
 
-
-def get_image_ID(attributes_filename):
+# OK
+def get_image_ID2(attributes_filename):
     all_image_id = re.findall(r'I[0-9]+',attributes_filename) # returns a array with all regular exp matches
     if len(all_image_id) > 0:
         return all_image_id[0]
     else:
         return ''
+    
+def get_image_demographic_data_by_id2(img_id, demographics_dictionary):
+    try:
+        subject_class_gender_sex_refslices = demographics_dictionary[img_id] # pick up demographics for the first
+    except ValueError:
+        print('There aren\'t image with this ID ({0})'.format(img_id))
+        
+    return subject_class_gender_sex_refslices
 
 
 def get_ref_slice_attributes(attributes_file, csv_dic, target_bplanes=[0]):
     attributes_as_str = []
     
-    img_id_str = get_image_ID(attributes_file)
-    img_id = int(img_id_str)
+    img_id_str = get_image_ID2(attributes_file)
+    
+    try:
+        img_id = int(img_id_str)
+    except ValueError:
+        print('This value ({0}) can not be converted to integer'.format(img_id_str))
     
     #csv_dic = build_csv_dictionary(csv_file)
     ref_slices = csv_dic['ref_slices']
@@ -122,9 +135,6 @@ def get_normalized_ref_slices_dic():
 
 
 
-
-
-
 def load_IDs_and_ref_img_from_axis(csv_file, axis_num=0):
     image_id_column_index = 3
     slice_column_index = 19 + axis_num
@@ -162,98 +172,6 @@ def load_IDs_and_ref_img_from_axis(csv_file, axis_num=0):
         except UnicodeDecodeError:
             print('Error processing file ({0})'.format(csv_file))
     
-#    attribs_as_floats_lists = []
-#    #print("*** Processing attributes file %s)" % attributes_file)
-#    for attribs_as_string in attributes_list:
-#        #print("Attribs as strings: ", attribs_as_string)
-#        a = []
-#        for str_attrib in attribs_as_string:
-#            #print('String attribute: ', str_attrib)
-#            if str_attrib != '':
-#                try:
-#                    value = float(str_attrib)
-#                except ValueError:
-#                    print('*** ERROR: Fail to convert an string attribute ("{0}") to float in load_attribs_and_metadata().\n Attributes File: {1}'.format(str_attrib, attributes_file))
-#                    sys.exit(-1)
-#                
-#                a.append(value)
-#                    
-#        attribs_as_floats_lists.append(a)
-#    
-#    # Counting slices from each body axis
-#    plane0 = body_plane_list.count('0') - 1 #256 slices are indexed between 0 and 255
-#    plane1 = body_plane_list.count('1') - 1
-#    plane2 = body_plane_list.count('2') - 1
-#    
-#    #plane0 = len(body_plane_list) - body_plane_list[::-1].index('0')
-#    #plane1 = len(body_plane_list) - body_plane_list[::-1].index('1') - plane0
-#    #plane2 = len(body_plane_list) - body_plane_list[::-1].index('2') - plane0 - plane1
-#    slice_amount_per_plane = [plane0,plane1,plane2]
-#    
-#    # NumPy transformations
-    #attribs = np.array(attribs_as_floats_lists, dtype=np.float64)
-    #image_ids = np.array(image_id_list, dtype=np.int64)
-    ref_slices = np.array(slicenum_list, dtype=np.int64)
-    #slice_amount = np.array(slice_amount_per_plane, dtype=np.int64)
-    
-    return  image_id_list, ref_slices
-    #return  attribs, slice_numbers, slice_amount
- 
-# Updated on 2019, Jan 17: to resolve problem where each file line ends with a comma (,).
-    # Resolution are not tested yet
-def append_attributes_to_file(
-        nii_img_full_filename, 
-        attributes, 
-        axis_num, 
-        slice_num, 
-        output_directory, 
-        mode="a",
-        verbose=False,
-        limit_precision=True):
-    
-    # build filename structure
-    if not os.path.exists(nii_img_full_filename):
-        raise ValueError("*** ERROR: input nii image filename not exist or can not be readed")
-        exit(1)
-    
-    input_file_dir,input_filename = os.path.split(nii_img_full_filename)
-    
-    if output_directory == None:
-        # Use input file dir as output when output dir is None
-        output_directory = input_file_dir
-    elif not os.path.exists(output_directory):
-        # create the output dir whether it doesnt exist
-        try:
-            os.makedirs(output_directory)
-        except os.error:
-            print ('*** ERROR: Output directory (%s) can not be created\n' % output_directory)
-            sys.exit(1)
-    
-    # building txt file name
-    txt_full_filename = build_txt_filename_from_3d_image(nii_img_full_filename,
-                                                      output_directory)
-    try :
-        output_file = open(txt_full_filename,mode)
-        # writting body axis and slice values
-        #output_file.write('%d,%d,' % (axis_num, slice_num))
-        output_file.write('{0:1d},{1:3d}'.format(axis_num, slice_num))
-        
-        # writtings attribs one by one
-        for attrib in attributes:
-            if attrib != "" or attrib != None or attrib != '\n':
-                if limit_precision:
-                    output_file.write(",{0:.8f}".format(attrib))
-                else:
-                    output_file.write(',{0}'.format(attrib))
-            
-        output_file.write('\n')
-        output_file.close()
-    except os.error:
-        output_file.close()
-        print(" *** ERROR: file %s can not be written" % txt_full_filename)
-        exit(1)
-    
-    return txt_full_filename
 
 
 def main(argv):
@@ -268,6 +186,15 @@ def main(argv):
     print('Max slice: ' + str(np.max(slices)) )
     print('Average value: ' + str(np.average(slices)) )
     print('Standard Deviation: ' + str(np.std(slices)) )
+    
+    dic = build_csv_dictionary2(input_csv)
+    
+    
+    #print(dic)
+    
+    img_demo_dic = get_image_demographic_data_by_id2('I120779',dic)
+    print('ref_slices=',img_demo_dic)
+    
     
     
     
