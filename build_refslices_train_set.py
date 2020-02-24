@@ -12,7 +12,7 @@ import numpy as np
 import list_dir
 
 
-__ADJUST_SIZE = [2,0,0] # recalculates ref_slice values by axis
+__ADJUST_REFSLICE_POSITION = [2,0,0] # recalculates ref_slice values by axis
 __NON_REFSLICE_SHIFT = [[0,-5,-5],[-4,-10,-10]] # used to point non ref_slice examples
 __AXIS = 0 # default Axis
 
@@ -26,8 +26,12 @@ def get_data_frame_from_csv(input_csv=__INPUT_CSV, columns_to_drop=__COLUMNS_TO_
     df = pd.read_csv(input_csv, delimiter=',')
     return df.drop(columns=columns_to_drop)
 
+def get_attribs_from_dataframe(attribs_df, axis_num, slice_num):
+    attribs = attribs_df.loc[(attribs_df[0]==axis_num) & (attribs_df[1]==slice_num)]
+    return attribs.iloc[0,2:].values
+
 def build_refslices_dataframe(csv_file=__INPUT_CSV, axis_num=0, attributes_dir=__ATTRIBUTES_DIR):
-    global __ADJUST_SIZE, __NON_REFSLICE_SHIFT
+    global __ADJUST_REFSLICE_POSITION, __NON_REFSLICE_SHIFT
     image_id_column_index = 3
     slice_column_index = 19 + axis_num
     
@@ -35,6 +39,7 @@ def build_refslices_dataframe(csv_file=__INPUT_CSV, axis_num=0, attributes_dir=_
     slicenum_list = []
     files_list = []
     attribs_list = []
+    ref_class_list = []
     
     #attributes_list = []
     print('Reading csv file: ' + csv_file)
@@ -60,14 +65,35 @@ def build_refslices_dataframe(csv_file=__INPUT_CSV, axis_num=0, attributes_dir=_
                         #print('attribs_file: ',attribs_file)
                         if attribs_file:
                             
-                            #attribs_df = pd.read_csv(attribs_file, delimiter=',',header=None)
-                            #attribs_df = attribs_df.loc[:, (attribs_df.loc[0]==axis_num) & (attribs_df.loc[1]==int_ref_slice)]
+                            attribs_df = pd.read_csv(attribs_file, delimiter=',',header=None)
+                            #print(attribs_df)
+                            corrected_position = int_ref_slice + __ADJUST_REFSLICE_POSITION[axis_num]
+                            
+                            #attribs_df = attribs_df.loc[(attribs_df[0]==axis_num) & (attribs_df[1]==int_ref_slice+adjustment)]
+                            attribs_np = get_attribs_from_dataframe(attribs_df, axis_num, corrected_position)
+                            #attribs_np = attribs_df.iloc[0,2:].values
+                            
+                            #dfObj.loc[dfObj['Name']=='jack']['Country']
                             
                             #print('attribs_df dimensions: ',attribs_df.size)
                             
+                            attribs_list.append(attribs_np)
                             slicenum_list.append(int_ref_slice)
                             image_id_list.append(image_id)
                             files_list.append(attribs_file)
+                            ref_class_list.append(1)
+                            
+                            for sublist in __NON_REFSLICE_SHIFT:
+                                position = sublist[axis_num]+corrected_position
+                                non_refslice_attribs_np = get_attribs_from_dataframe(attribs_df, axis_num, position)
+                                
+                                ref_class_list.append(0)
+                                image_id_list.append(image_id)
+                                files_list.append(attribs_file)
+                                slicenum_list.append(position)
+                                attribs_list.append(non_refslice_attribs_np)
+                                
+                                                                
                             
                         
                     
@@ -80,10 +106,10 @@ def build_refslices_dataframe(csv_file=__INPUT_CSV, axis_num=0, attributes_dir=_
     idl = pd.DataFrame(image_id_list,columns=['image_id'])
     scl = pd.DataFrame(slicenum_list,columns=['ref_slice'])
     afl = pd.DataFrame(files_list,columns=['attribs_file'])
-
+    att = pd.DataFrame(attribs_list)
+    rcl = pd.DataFrame(ref_class_list,columns=['ref_class'])
     
-    
-    return pd.concat([idl,scl,afl],axis=1)
+    return pd.concat([idl,scl,afl,rcl,att],axis=1)
 
 
 def get_image_ID(attributes_filename):
@@ -138,7 +164,7 @@ to_remove = []
 
 
 #df = pd.concat([df,pd.DataFrame(all_files,columns=['attribs_filename'])],axis=1)   
-print(df)
+print(df.iloc[:5 , :5])
 #print(to_remove)
 
 
