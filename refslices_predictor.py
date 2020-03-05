@@ -681,7 +681,7 @@ def buildDataFrames(X_data, y_data, M_data, header='', debug=False):
     y_pandas = pd.DataFrame(data=y_data)
     
     if header:
-        M_pandas = pd.DataFrame(data=M_data, columns=[header[0],header[2],header[3],header[4]])
+        M_pandas = pd.DataFrame(data=M_data, columns=[header[0],header[2],header[3],header[4],'nao_sei'])
     else:
         M_pandas = pd.DataFrame(data=M_data)
     
@@ -736,21 +736,21 @@ def evaluate_model(X_data, y_data, model_name,
     start_time = time.time()
     
     #import pandas as pd
-    #non_float_columns = []
+    non_float_columns = []
     
-    #print('X_data:\n',X_data)
+    print('X_data:\n',X_data)
     
-#    for col in X_data:
-#        if X_data[col].dtypes != np.float64:
-#            non_float_columns.append(col)
-#        else:
-#            print('found a np.float64 column label: ',col)
-#    
-#    print('non_float_columns: ',non_float_columns)
-#    
+    for col in X_data:
+        if X_data[col].dtypes != np.float64:
+            non_float_columns.append(col)
+        else:
+            print('found a np.float64 column at label ',col)
+    
+    print('non_float_columns: ',non_float_columns)
+    
     
     numeric_X_data = X_data.iloc[:, 4:]
-    #print('numeric_X_data:\n',numeric_X_data)
+    print('numeric_X_data:\n',numeric_X_data)
     #numeric_X_data = X_data
     #for col in non_float_columns:
     #    numeric_X_data = X_data.drop(col)
@@ -854,13 +854,13 @@ def evaluate_model(X_data, y_data, model_name,
     np_all_acc = np.array(all_acc)
 
     # OPTIONAL STEP : Showing side by side y_pred x y_true x error
-#    import pandas as pd
-#    if cur_metric == 'mse':
-#        all_errors = pd.DataFrame(data=np_all_mse)
-#    else:
-#        all_errors = pd.DataFrame(data=np_all_mae)
-#    print('y_pred=',y_pred)
-#    print('y_test=',y_test)
+    import pandas as pd
+    if cur_metric == 'mse':
+        all_errors = pd.DataFrame(data=np_all_mse)
+    else:
+        all_errors = pd.DataFrame(data=np_all_mae)
+    print('y_pred=',y_pred)
+    print('y_test=',y_test)
 #    
 #    y_pred_test = pd.concat([pd.DataFrame(data=y_pred,columns='y_pred'),pd.DataFrame(data=y_test,columns='y_true')],axis=1,sort=False)
 #    y_pred_test_error = pd.concat([y_pred_test,pd.DataFrame(data=all_errors,columns='error')],axis=1,sort=False)
@@ -966,7 +966,10 @@ def main(argv):
     
     #print('M_data:\n',M_data)
     
-    X_pandas, y_pandas = buildDataFrames(X_data, Y_data, M_data, head, True)
+    X_pandas, y_pandas = buildDataFrames(X_data, Y_data, M_data, head, debug=True)
+    
+    print('Retrived X_pandas from ',csv_filename,'\n',X_pandas)
+    
     model_name = 'RF'
     
     dicionary_results = evaluate_model(X_pandas, y_pandas, model_name, __KCV_FOLDS, cv_seed=7, cv_shuffle=__CV_SHUFFLE,

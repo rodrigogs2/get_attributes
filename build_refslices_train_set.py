@@ -111,6 +111,39 @@ def build_refslices_dataframe(csv_file=__INPUT_CSV, axis_num=0, attributes_dir=_
     
     return pd.concat([idl,scl,afl,rcl,att],axis=1)
 
+def build_and_save_refslices_dataframe(csv_file=__INPUT_CSV, 
+                           axis_num=0, 
+                           attributes_dir=__ATTRIBUTES_DIR, 
+                           o_file='/home/rodrigo/Documentos/_phd/git/ref-slices_attributes.csv'):
+        
+#                           ref_axis, 
+#                           valid_genders=['M','F'], 
+#                           min_age=0.0, 
+#                           max_age=200.0, 
+#                           debug=False, 
+#                           black_list_id=[], 
+#                           o_file='/home/rodrigo/Documentos/_phd/git/ref-slices_attributes.csv', 
+#                           attribs_dir='../../attributes2'):
+    #all_ref_attribs = []
+    
+    df = build_refslices_dataframe(csv_file,axis_num,attributes_dir)
+    #dic = build_csv_dictionary2(input_csv)
+    
+    output_dir,filename = os.path.split(o_file)
+    
+    output_filename_without_extension, file_extension = os.path.splitext(filename)
+    
+    new_output_file = "{0}-axis{1}{2}".format(
+            output_filename_without_extension, 
+            axis_num,
+            file_extension)
+    
+    output_file = os.path.join(output_dir, new_output_file)
+    print('DF ready to save to destination file ',output_file)
+    
+    df.to_csv(path_or_buf=output_file, index=False)
+    
+    
 
 def get_image_ID(attributes_filename):
     all_image_id = re.findall(r'I[0-9]+',attributes_filename) # returns a array with all regular exp matches
@@ -136,12 +169,17 @@ def find_attributes_file(target_image_id, attributes_dir=__ATTRIBUTES_DIR):
 
 ########
 
-df = build_refslices_dataframe()
 
-target_id = ''
 
-all_files = []
-to_remove = []
+####df = build_refslices_dataframe()
+build_and_save_refslices_dataframe(axis_num=2)
+
+            
+
+#target_id = ''
+
+#all_files = []
+#to_remove = []
 #for row in df.head(df.size - 1).itertuples():
 #    #print(row)
 #    target_id = 'I' + str(row[1])
@@ -164,7 +202,7 @@ to_remove = []
 
 
 #df = pd.concat([df,pd.DataFrame(all_files,columns=['attribs_filename'])],axis=1)   
-print(df.iloc[:5 , :5])
+print(df.iloc[:9 , :6])
 #print(to_remove)
 
 
