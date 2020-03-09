@@ -5,6 +5,7 @@ Created on Sun Feb 23 12:57:54 2020
 
 @author: rodrigo
 """
+import build_refslices_train_set
 
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.neighbors import KNeighborsClassifier
@@ -39,6 +40,10 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 
 import matplotlib.pyplot as plt
+
+# Global Variables
+#__COLUMNS_TO_DROP = ['image_id','ref_slice','attribs_file','ref_class']
+
 
 
 def build_models_names_list():
@@ -266,7 +271,7 @@ def saveParametersFile(max_consec_slices,num_groupings):
     output_dir_path = build_experiments_output_dir_name()
     
     
-    filename = 'parameters_{0}.txt'.format(__REFSP_RUN_ID)
+    filename = 'refsp-run_{0}-parameters.txt'.format(__REFSP_RUN_ID)
     param_full_filename = os.path.join(output_dir_path, filename)
     
     append_mode = "a"
@@ -320,7 +325,7 @@ def save_final_result_boxplot(best_inds,labels,title='Title',debug=__VERBOSE,bck
     
     best_of_bests_position = np.argmax(np.array(best_fits))
     best_of_bests = best_fits[best_of_bests_position]
-    img_filename = 'final_result-acc_{0}-model_{1}-run_{2}.png'.format(best_of_bests, __MODEL_NAME,__REFSP_RUN_ID)
+    img_filename = 'refsp-run_{2}-final_result-acc_{0}-model_{1}.png'.format(best_of_bests, __MODEL_NAME,__REFSP_RUN_ID)
     
     output_dir_path = build_experiments_output_dir_name()
     
@@ -342,7 +347,7 @@ def saveResultsCSVFile(all_experiments_best_ind):
     output_dir_path = build_experiments_output_dir_name()
     
     
-    filename = 'results_{0}_{1}.csv'.format(__REFSP_RUN_ID, __MODEL_NAME)
+    filename = 'results-run_{0}-{1}.csv'.format(__REFSP_RUN_ID, __MODEL_NAME)
     results_full_filename = os.path.join(output_dir_path, filename)
     
     append_mode = "a"
@@ -399,7 +404,7 @@ def saveDetailedResultsCSVFile(all_experiments_best_ind):
     output_dir_path = build_experiments_output_dir_name()
     
     
-    filename = 'detailed_results_{0}_{1}.csv'.format(__REFSP_RUN_ID, __MODEL_NAME)
+    filename = 'refsp-run_{0}-detailed_results_{1}.csv'.format(__REFSP_RUN_ID, __MODEL_NAME)
     results_full_filename = os.path.join(output_dir_path, filename)
     
     append_mode = "a"
@@ -519,34 +524,29 @@ def append_experiment_data_to_output_file(
     
     return exp_output_full_filename
 
-def all_metrics_names(metric='acc'):
+def all_metrics_names(main_metric='acc'):
     metrics = []
     
     
-    if metric == 'acc':
+    if main_metric == 'acc':
         metrics.append('name')
         metrics.append('mean_acc')
         metrics.append('std_acc')
         metrics.append('best_acc')
-        #metrics.append('best_cmat')
         metrics.append('worst_acc')
-        metrics.append('conf_matrix')
+        #metrics.append('conf_matrix_from_the_best')
         metrics.append('total_time')
         metrics.append('all_acc_np')
-        #metrics.append('all_cmat')
         metrics.append('median_acc')
-        #metrics.append('median_cmat')
-    elif metric == 'mae':
+    elif main_metric  == 'mae':
     #    [model_name,mean_mse,best_mse,std_mse,worst_mse,total_time,all_mse,median_mse]
         metrics.append('name')
         metrics.append('mean_mae')
         metrics.append('std_mae')
         metrics.append('best_mae')
-        #metrics.append('best_cmat')
         metrics.append('worst_mae')
         metrics.append('total_time')
         metrics.append('all_mae_np')
-        #metrics.append('all_cmat')
         metrics.append('median_mae')
         #metrics.append('median_cmat')
     else:
@@ -582,9 +582,77 @@ def saveExperimentsDataToFile(exp_num, best_ind, bestIndividuals, generationsWit
     
     return ofile
 
-
-
 def read_refslices_data_from_csv(csv_file):
+    df = build_refslices_train_set.get_data_frame_from_csv(csv_file)
+    
+        
+    X_data = df.drop([],axis=1)
+    Y_data = []
+    M_data = []
+    ref_class = 1
+    
+    #demographics_dictionary = {}
+    header = ''
+
+    if os.path.exists(csv_file):
+
+        try:
+            with open(csv_file, 'r') as file:
+                #print('CSV File received: ', csv_file)
+                reader = csv.reader(file)
+                header = next(reader) 
+                for row in reader:
+                    image_id = row[0]
+                    gender = row[2]
+                    age = row[3]
+                    alz_class = row[4]
+                    all_refslice_str_attribs = row[5:]
+                    
+                    try:
+                        age = int(age)
+
+                    except ValueError:
+                        print('* Invalid AGE({0}) entry for image ID {1}. CSV file has problems'.format(age, image_id))
+
+                    try:
+                        ref_slice = int(row[1])                        
+                    except ValueError:
+                        print('* Invalid REF_SLICE({0}) entry for image ID {1}. CSV file has problems'.format(ref_slice, image_id))
+                    
+                    try:
+                        alz_class = int(alz_class)
+
+                    except ValueError:
+                        print('* Invalid ALZHEIMER CLASS({0}) entry for image ID {1}. CSV file has problems'.format(alz_class, image_id))
+                    
+                    M_data.append((image_id,gender,age,alz_class,ref_class))
+                    
+                    position = 0
+                    all_refslice_attribs = []
+                    for str_attrib in all_refslice_str_attribs:
+                        try:
+                            attrib = float(str_attrib)
+                        except ValueError:
+                            print('* Invalid attrib value({0}) entry for image ID {1} at {2}th atribute position. CSV file has problems'.format(str_attrib, image_id, position))
+                        all_refslice_attribs.append(attrib)
+                        position = position + 1
+                    
+                    X_data.append(all_refslice_attribs)
+                    Y_data.append(ref_slice)
+                    
+                    
+        except os.error:
+            print("*** ERROR: The csv file %s can not be readed (os.error in build_classes_dictionary)" % csv_file)    
+
+    else:
+        message = str("file %s does not exist!" % csv_file)
+        raise ValueError(message)
+    return X_data, Y_data, M_data, header
+
+
+def old_read_refslices_data_from_csv(csv_file):
+    build_refslices_train_set.get_data_frame_from_csv(csv_file)
+    
     X_data = []
     Y_data = []
     M_data = []
@@ -731,7 +799,7 @@ def evaluate_model(X_data, y_data, model_name,
                    pca=False, debug=False):
 
     all_acc = []
-    all_cmat = []
+    #all_cmat = []
     
     start_time = time.time()
     
@@ -838,9 +906,9 @@ def evaluate_model(X_data, y_data, model_name,
         #all_mae.append(mae)
         #all_mse.append(mse)
         all_acc.append(acc)
-        all_cmat.append(cmat)
-        print('conf_matrix:\n',conf_matrix)
-        print('np.array(cmat)=\n',np.array(cmat))
+        #all_cmat.append(cmat)
+        #print('conf_matrix:\n',conf_matrix)
+        #print('np.array(cmat)=\n',np.array(cmat))
         conf_matrix = conf_matrix + np.array(cmat)
         #all_cmat.append(cmat)
         
@@ -855,13 +923,13 @@ def evaluate_model(X_data, y_data, model_name,
     np_all_acc = np.array(all_acc)
 
     # OPTIONAL STEP : Showing side by side y_pred x y_true x error
-    import pandas as pd
-    if cur_metric == 'mse':
-        all_errors = pd.DataFrame(data=np_all_mse)
-    else:
-        all_errors = pd.DataFrame(data=np_all_mae)
-    print('y_pred=',y_pred)
-    print('y_test=',y_test)
+#    import pandas as pd
+#    if cur_metric == 'mse':
+#        all_errors = pd.DataFrame(data=np_all_mse)
+#    elif cur_metric == 'mae':
+#        all_errors = pd.DataFrame(data=np_all_mae)
+#    print('y_pred=',y_pred)
+#    print('y_test=',y_test)
 #    
 #    y_pred_test = pd.concat([pd.DataFrame(data=y_pred,columns='y_pred'),pd.DataFrame(data=y_test,columns='y_true')],axis=1,sort=False)
 #    y_pred_test_error = pd.concat([y_pred_test,pd.DataFrame(data=all_errors,columns='error')],axis=1,sort=False)
@@ -872,11 +940,12 @@ def evaluate_model(X_data, y_data, model_name,
     # Finding position of the best and the worst individual
     best_acc_pos  = np.argmax(np_all_acc) if maximization else np.argmin(np_all_acc)
     worst_acc_pos = np.argmin(np_all_acc) if maximization else np.argmax(np_all_acc)
+    median_pos = folds//2
 #    best_mae_pos  = np.argmax(np_all_mae) if maximization else np.argmin(np_all_mae)
 #    worst_mae_pos = np.argmin(np_all_mae) if maximization else np.argmax(np_all_mae)
 #    best_mse_pos  = np.argmax(np_all_mse) if maximization else np.argmin(np_all_mse)
 #    worst_mse_pos = np.argmin(np_all_mse) if maximization else np.argmax(np_all_mse)
-    median_pos = folds//2
+    
     
 #    best_mae = np_all_mae[best_mae_pos]
 #    best_mse = np_all_mse[best_mse_pos]
@@ -1001,8 +1070,14 @@ def main(argv):
 #
 #
 
-def refsp():
-    return 0
+def refsp(all_attribs,
+          all_slice_amounts,
+          all_output_classes,
+          all_genders,
+          all_ages,
+          max_consecutive_slices, # length of slices range
+          number_of_groupings):
+    return 0;
 
 
 # FUNCAO MAIN do Ref Slice Predictor
@@ -1020,6 +1095,7 @@ def main_refsp(argv):
     verbose_ok = False
     multi_cpu_ok = False
     number_of_experiments = 1
+    
     
     try:
         opts, args = getopt.getopt(argv[1:],"hc:a:o:m:s:vpn:",["csv=","attributes_dir=","output_dir=","model=","seeds_file=","verbose","parallel","number_of_experiments="]) 
