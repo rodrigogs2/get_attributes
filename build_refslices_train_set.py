@@ -143,6 +143,8 @@ def build_and_save_refslices_dataframe(csv_file=__INPUT_CSV,
     
     df.to_csv(path_or_buf=output_file, index=False)
     
+    return df
+    
     
 
 def get_image_ID(attributes_filename):
@@ -171,8 +173,12 @@ def find_attributes_file(target_image_id, attributes_dir=__ATTRIBUTES_DIR):
 
 
 
-####df = build_refslices_dataframe()
-build_and_save_refslices_dataframe(axis_num=2)
+####df = build_refslices_dataframe()f
+bplanes = [0,1,2]
+for plane in bplanes:
+    df = build_and_save_refslices_dataframe(axis_num=plane)
+    print(df.iloc[:9 , :6])
+    
 
             
 
@@ -202,7 +208,7 @@ build_and_save_refslices_dataframe(axis_num=2)
 
 
 #df = pd.concat([df,pd.DataFrame(all_files,columns=['attribs_filename'])],axis=1)   
-print(df.iloc[:9 , :6])
+
 #print(to_remove)
 
 

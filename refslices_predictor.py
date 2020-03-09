@@ -838,6 +838,7 @@ def evaluate_model(X_data, y_data, model_name,
         #all_mae.append(mae)
         #all_mse.append(mse)
         all_acc.append(acc)
+        all_cmat.append(cmat)
         print('conf_matrix:\n',conf_matrix)
         print('np.array(cmat)=\n',np.array(cmat))
         conf_matrix = conf_matrix + np.array(cmat)
@@ -1009,7 +1010,7 @@ def main_refsp(argv):
     csv_file = ''
     attribs_dir = ''
     out_dir = './'
-    model = ''
+    model = 'KNN'
     seeds_file = ''
     csv_file_ok = False
     attribs_dir_ok = False
