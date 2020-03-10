@@ -369,7 +369,7 @@ def save_refslices_attribs(input_csv,
                            max_age=200.0, 
                            debug=False, 
                            black_list_id=[], 
-                           o_file='/home/rodrigo/Documentos/_phd/git/ref-slices_attributes.csv', 
+                           o_file='../ref-slices_attributes.csv', 
                            attribs_dir='../../attributes2'):
     #all_ref_attribs = []
     

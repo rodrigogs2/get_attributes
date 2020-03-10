@@ -16,15 +16,15 @@ __ADJUST_REFSLICE_POSITION = [2,0,0] # recalculates ref_slice values by axis
 __NON_REFSLICE_SHIFT = [[0,-5,-5],[-4,-10,-10]] # used to point non ref_slice examples
 __AXIS = 0 # default Axis
 
-# ADNI CSV file columns 
-#__ADNI_CSVFILE_COLUMNS_DICTIONARY = {
-#        'image_id' : 0,
-#        'ref_slice' : 1,
-#        'attribs_file' : 2,
-#        'age' : 3,
-#        'gender' : 4,
-#        'ref_class' : 5
-#        }
+ # ADNI CSV file columns 
+__ADNI_CSVFILE_COLUMNS_DICTIONARY = {
+        'image_id' : 0,
+        'ref_slice' : 1,
+        'attribs_file' : 2,
+        'age' : 3,
+        'gender' : 4,
+        'ref_class' : 5
+        }
 
 __ADNI_CSV_IMAGE_ID_COLUMN_INDEX = 3
 __ADNI_CSV_COLUMN_OF_FIRST_SLICE_ATTRIBUTE = 19
@@ -32,7 +32,8 @@ __ADNI_CSV_COLUMN_OF_FIRST_SLICE_ATTRIBUTE = 19
 __INPUT_CSV = "./com_OFFSET_ADNI1_Complete_All_Yr_3T.csv"
 __ATTRIBUTES_DIR = '../../attributes2'
 __COLUMNS_TO_DROP_FROM_ADNI_CSV = ['ADNI #','Year','Magnetic_Field','Subject','Visit','Modality','Description','GW','Type','Acq Date','Format','Downloaded','Date Yield','Format','Data upload']
-                                   
+
+# REFSLICE CSV File columns                                   
 __REFSLICE_CSVFILE_COLUMNS_DICTIONARY = {
     'image_id' : 0,
     'ref_slice' : 1,
@@ -43,17 +44,46 @@ __REFSLICE_CSVFILE_COLUMNS_DICTIONARY = {
         }
                      
                      
-def get_data_frame_from_csv(input_csv=__INPUT_CSV, columns_to_drop=__COLUMNS_TO_DROP_FROM_ADNI_CSV):
+def get_data_frame_from_adni_csv(input_csv=__INPUT_CSV, columns_to_drop=__COLUMNS_TO_DROP_FROM_ADNI_CSV):
     df = pd.read_csv(input_csv, delimiter=',')
-    return df#df.drop(columns=columns_to_drop)
+    return df #df.drop(columns=columns_to_drop)
+
+def build_dataframe_from_adni_csv(adni_csv_file=__INPUT_CSV, axis_num=0, attributes_dir=__ATTRIBUTES_DIR):
+    global __ADJUST_REFSLICE_POSITION, __NON_REFSLICE_SHIFT, __ADNI_CSV_IMAGE_ID_COLUMN_INDEX 
+    global __ADNI_CSV_COLUMN_OF_FIRST_SLICE_ATTRIBUTE, __REFSLICE_CSV_IMAGEID_COLUMN
+    
+    #image_id_column_index = __ADNI_CSV_IMAGE_ID_COLUMN_INDEX 
+    #slice_column_index = __ADNI_CSV_COLUMN_OF_FIRST_SLICE_ATTRIBUTE + axis_num
+    df = pd.read_csv(adni_csv_file)
+    return df
+    
+
 
 def load_dataframes_from_csv(refslice_csv):
+    adni_csv_header = ['ADNI #','Year','Magnetic_Field','Image Data ID','Subject','Group','Sex','Age','Visit','Modality','Description','GW','Type','Acq Date','Format','Downloaded','Date Yield','Format.1','Data upload','Axis0-RefSlice','Axis1-RefSlice','Axis2-RefSlice','Axis2-RefSliceHard']
+                       
+                       
+    
     #csv_file = '../ref-slices_attributes-axis{0}.csv'.format(plane)
-    df = get_data_frame_from_csv(input_csv=refslice_csv)
-    X_data = df.iloc[:, __REFSLICE_CSV__REFSLICE_CLASS_COLUMN + 1:]
+    
+    #column_of_ref_slice = __REFSLICE_CSVFILE_COLUMNS_DICTIONARY['ref_slice']
+    #column_of_attribs_filename = __REFSLICE_CSVFILE_COLUMNS_DICTIONARY['attribs_file']
+    #column_of_age = __REFSLICE_CSVFILE_COLUMNS_DICTIONARY['age']
+    #column_of_gender = __REFSLICE_CSVFILE_COLUMNS_DICTIONARY['gender']
+    column_of_ref_class = __REFSLICE_CSVFILE_COLUMNS_DICTIONARY['ref_class']
+    column_of_first_attribute =  column_of_ref_class + 1
+    
+    
+    df = pd.read_csv(refslice_csv)
+    X_data = df.iloc[:, column_of_first_attribute:]
     #print('X_data:\n',X_data)
-    y_data = df.iloc[:, __REFSLICE_CSV__REFSLICE_CLASS_COLUMN]
+    y_data = df.iloc[:, column_of_ref_class]
     #print('y_data:\n',y_data)
+    M_data = df.iloc[:, :column_of_ref_class]
+    #M_data.append((image_id,attribs_filename,gender,age))
+    
+    
+    return X_data, y_data, M_data
     
     return 0
 
@@ -69,11 +99,9 @@ def build_refslices_dataframe(csv_file=__INPUT_CSV, axis_num=0, attributes_dir=_
     
     
     
-    refslice_csv_imageid_column_index = __REFSLICE_CSV_IMAGEID_COLUMN 
+    #refslice_csv_imageid_column_index = __REFSLICE_CSV_IMAGEID_COLUMN 
     
     #M_data.append((image_id,gender,age,alz_class,ref_class))
-    gender_list = []
-    age_list = []
     
     image_id_list = []
     slicenum_list = []
@@ -82,7 +110,7 @@ def build_refslices_dataframe(csv_file=__INPUT_CSV, axis_num=0, attributes_dir=_
     ref_class_list = []
     
     #attributes_list = []
-    print('Reading csv file: ' + csv_file)
+    print('Reading ADNI csv file: ' + csv_file)
     
     if os.path.exists(csv_file):
         try:
@@ -156,7 +184,7 @@ def build_refslices_dataframe(csv_file=__INPUT_CSV, axis_num=0, attributes_dir=_
 def build_and_save_refslices_dataframe(csv_file=__INPUT_CSV, 
                            axis_num=0, 
                            attributes_dir=__ATTRIBUTES_DIR, 
-                           o_file='/home/rodrigo/Documentos/_phd/git/ref-slices_attributes.csv'):
+                           o_file='../ref-slices_attributes.csv'):
         
 #                           ref_axis, 
 #                           valid_genders=['M','F'], 
@@ -168,8 +196,8 @@ def build_and_save_refslices_dataframe(csv_file=__INPUT_CSV,
 #                           attribs_dir='../../attributes2'):
     #all_ref_attribs = []
     
-    df = build_refslices_dataframe(csv_file,axis_num,attributes_dir)
-    #dic = build_csv_dictionary2(input_csv)
+    #df = build_refslices_dataframe(csv_file,axis_num,attributes_dir)
+    df = build_dataframe_from_adni_csv(csv_file,axis_num,attributes_dir)
     
     output_dir,filename = os.path.split(o_file)
     
@@ -182,7 +210,8 @@ def build_and_save_refslices_dataframe(csv_file=__INPUT_CSV,
     
     output_file = os.path.join(output_dir, new_output_file)
     print('DF ready to save to destination file ',output_file)
-    
+    print('current_dir: ', os.getcwd())
+
     df.to_csv(path_or_buf=output_file, index=False)
     
     return df
@@ -215,16 +244,16 @@ def find_attributes_file(target_image_id, attributes_dir=__ATTRIBUTES_DIR):
 # FUNCAO MAIN
 def main(argv):
     df = None
-    refresh_ok = False
-    bplanes = [0,1,2]
-    global __COLUMN_OF_FIRST_SLICE_ATTRIBUTE
-    global __REFSLICE_CSV__REFSLICE_CLASS_COLUMN    
+    rebuild_ok = True
+    #bplanes = [0,1,2]
+    bplanes = [0]
+    #global __COLUMN_OF_FIRST_SLICE_ATTRIBUTE, __REFSLICE_CSV__REFSLICE_CLASS_COLUMN    
 
     for plane in bplanes:
-        if refresh_ok:
+        if rebuild_ok:
             df = build_and_save_refslices_dataframe(axis_num=plane)
         else:
-            
+            df = get_data_frame_from_csv()
             
         print(df.iloc[:9 , :6]) 
     
