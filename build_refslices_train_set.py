@@ -69,6 +69,7 @@ def split_dataframe(refslices_csv_as_dataframe):
     df = refslices_csv_as_dataframe
     
     # Getting right columns positions
+    header = df.columns.values.tolist()
     column_of_ref_class = __REFSLICE_CSVFILE_COLUMNS_DICTIONARY['ref_class']
     column_of_first_attribute =  column_of_ref_class + 1
 
@@ -76,7 +77,7 @@ def split_dataframe(refslices_csv_as_dataframe):
     y_data = df.iloc[:, column_of_ref_class]
     M_data = df.iloc[:, :column_of_ref_class]
     
-    return X_data, y_data, M_data
+    return X_data, y_data, M_data, header
 
 
 def load_dataframes_from_csv(axis_num):
@@ -211,30 +212,11 @@ def build_and_save_refslices_dataframe(csv_file=__INPUT_CSV,
                            attributes_dir=__ATTRIBUTES_DIR, 
                            o_file=__DEFAULT_OUTPUT_REFSLICES_CSV_FILE):
         
-#                           ref_axis, 
-#                           valid_genders=['M','F'], 
-#                           min_age=0.0, 
-#                           max_age=200.0, 
-#                           debug=False, 
-#                           black_list_id=[], 
-#                           o_file='/home/rodrigo/Documentos/_phd/git/ref-slices_attributes.csv', 
-#                           attribs_dir='../../attributes2'):
-    #all_ref_attribs = []
-    
     df = build_refslices_dataframe(csv_file,axis_num,attributes_dir)
     
     
     output_file = build_refslice_csv_filename(axis_num)
-#    output_dir,filename = os.path.split(o_file)
-#    
-#    output_filename_without_extension, file_extension = os.path.splitext(filename)
-#    
-#    new_output_file = "{0}-axis{1}{2}".format(
-#            output_filename_without_extension, 
-#            axis_num,
-#            file_extension)
-#    
-#    output_file = os.path.join(output_dir, new_output_file)
+
     print('DF ready to save to destination file ',output_file)
     print('current_dir: ', os.getcwd())
 
@@ -264,25 +246,43 @@ def find_attributes_file(target_image_id, attributes_dir=__ATTRIBUTES_DIR):
             return file
 
 
-#def get_slice_attribs(slicenum,axis=0,)
-
 ########
 # FUNCAO MAIN
 def main(argv):
-    rebuild_ok = True
+    rebuild_ok = False
     bplanes = [0,1,2]
+    global __ADJUST_REFSLICE_POSITION, __NON_REFSLICE_SHIFT
+    __ADJUST_REFSLICE_POSITION = [2,0,0] # recalculates ref_slice values by axis
+    __NON_REFSLICE_SHIFT = [[-2,-2,-2],[-6,-6,-6],[-4,-4,-4]] # used to point non ref_slice examples
+    
+    
+    model_name = 'RF'
     #bplanes = [0]
 
     for plane in bplanes:
         if rebuild_ok:
             df = build_and_save_refslices_dataframe(axis_num=plane)
-            X_data,y_data,M_data = split_dataframe(df)
+            X_data,y_data,M_data,head = split_dataframe(df)
         else:
-            X_data,y_data,M_data = load_dataframes_from_csv(plane)
+            X_data,y_data,M_data,head = load_dataframes_from_csv(plane)
             
         print('X_data:\n', X_data.iloc[:9 , :6])
         print('y_data:\n', y_data.iloc[:9])
         print('M_data:\n', M_data.iloc[:9 ,:])
+        
+        import evaluate_refslices_predictors as ep
+        result_dic = ep.evaluate_model(X_data, 
+                          y_data,
+                          model_name,
+                          10)
+        
+        print('Result for plane {1}: mean_acc = {0} std_acc = {2}'.format(result_dic['mean_acc'],plane,result_dic['std_acc']))
+
+#        evaluate_model(X_data, y_data, model_name,
+#                   folds, cv_seed=7, cv_shuffle=True,
+#                   smote=True, rescaling=True, cores_num=1, 
+#                   maximization=True, stratified_kfold=True,
+#                   pca=False, debug=False):        
 
     return 0
 
@@ -372,9 +372,9 @@ def main_final(argv):
         for plane in bplanes:
             if rebuild_ok:
                 df = build_and_save_refslices_dataframe(axis_num=plane)
-                X_data,y_data,M_data = split_dataframe(df)
+                X_data,y_data,M_data,header = split_dataframe(df)
             else:
-                X_data,y_data,M_data = load_dataframes_from_csv(plane)
+                X_data,y_data,M_data,header = load_dataframes_from_csv(plane)
                 
             print('X_data:\n', X_data.iloc[:9 , :6])
             print('y_data:\n', y_data.iloc[:9])

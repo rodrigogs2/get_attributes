@@ -64,7 +64,7 @@ def build_models_dictionary(knn_k_value=3,lr_solver='sag',lr_multiclass='ovr',rf
     models_constructors.append(LinearDiscriminantAnalysis())
     models_constructors.append(DecisionTreeClassifier())
     models_constructors.append(GaussianNB())
-    models_constructors.append(SVC())
+    models_constructors.append(SVC(gamma='scale'))
     models_constructors.append(RandomForestClassifier(n_estimators=rf_estimators))
     models_constructors.append(LogisticRegression(solver=lr_solver, multi_class=lr_multiclass))
     #models_constructors.append()
@@ -75,13 +75,14 @@ def build_models_dictionary(knn_k_value=3,lr_solver='sag',lr_multiclass='ovr',rf
     return models_dic
 
 #Global Variables
-__VERBOSE = False
+__VERBOSE = True
 
 # Global Slicing Arguments
 #global __ALL_ATTRIBS, __ALL_OUTPUT_VALUES, __BODY_PLANES, __MAX_SLICES_VALUES, __DEFAULT_MAX_CONSEC_SLICES, __DEFAULT_NUMBER_OF_GROUPINGS
 
 # Global Alzheimer Classification Problem Arguments
 #global __GENES_LOW_LIMITS, __GENES_UP_LIMITS, __DEFAULT_KNN_K_VALUE, __VERBOSE
+
 
 # Global Classifiers Parameters
 global __DEFAULT_KNN_K_VALUE, __DEFAULT_RF_NUM_ESTIMATORS, __DEFAULT_LR_SOLVER, __DEFAULT_LR_MULTICLASS
@@ -113,7 +114,7 @@ __BLACK_LIST_ID = ['I288905','I288906','I120446','I120441','I120426','I120436','
 #__DEFAULT_NUMBER_OF_GROUPINGS = 1
 
 # Classifier parameters
-__MODEL_NAME = 'KNN'
+__MODEL_NAME = 'RF'
 #    models = []
 #    models.append(('KNN', KNeighborsClassifier(n_neighbors=knn_k_value)))
 #    models.append(('LDA', LinearDiscriminantAnalysis()))
@@ -125,8 +126,8 @@ __MODEL_NAME = 'KNN'
 
 
 # Default Specific Parameters for each Classifier
-__DEFAULT_KNN_K_VALUE = 3
-__DEFAULT_RF_NUM_ESTIMATORS = 100
+__DEFAULT_KNN_K_VALUE = 9
+__DEFAULT_RF_NUM_ESTIMATORS = 10000
 __DEFAULT_LR_SOLVER = 'sag'
 __DEFAULT_LR_MULTICLASS = 'ovr'
 
@@ -141,14 +142,14 @@ __MODEL_CONSTRUCTOR = __MODELS[__MODEL_NAME]
 
 
 __USE_RESCALING = True
-__USE_SMOTE = False
+__USE_SMOTE = True
 __USE_PCA = True
 __CV_TYPE = 'kcv'
 __CV_MULTI_THREAD = True
 __CV_SHUFFLE = True
 __KCV_FOLDS = 10
-__USE_STRATIFIED_KFOLD = False
-__MAXIMIZATION_PROBLEM = False
+__USE_STRATIFIED_KFOLD = True
+__MAXIMIZATION_PROBLEM = True
 
 # Runtime Parameters
 __REFSP_RUN_ID = ''
@@ -590,69 +591,82 @@ def saveExperimentsDataToFile(exp_num, best_ind, bestIndividuals, generationsWit
 
 
 
-def read_refslices_data_from_csv(csv_file):
-    X_data = []
-    Y_data = []
-    M_data = []
-    ref_class = 1
-    
-    #demographics_dictionary = {}
-    header = ''
-
-    if os.path.exists(csv_file):
-
-        try:
-            with open(csv_file, 'r') as file:
-                #print('CSV File received: ', csv_file)
-                reader = csv.reader(file)
-                header = next(reader) 
-                for row in reader:
-                    image_id = row[0]
-                    gender = row[2]
-                    age = row[3]
-                    alz_class = row[4]
-                    all_refslice_str_attribs = row[5:]
-                    
-                    try:
-                        age = int(age)
-
-                    except ValueError:
-                        print('* Invalid AGE({0}) entry for image ID {1}. CSV file has problems'.format(age, image_id))
-
-                    try:
-                        ref_slice = int(row[1])                        
-                    except ValueError:
-                        print('* Invalid REF_SLICE({0}) entry for image ID {1}. CSV file has problems'.format(ref_slice, image_id))
-                    
-                    try:
-                        alz_class = int(alz_class)
-
-                    except ValueError:
-                        print('* Invalid ALZHEIMER CLASS({0}) entry for image ID {1}. CSV file has problems'.format(alz_class, image_id))
-                    
-                    M_data.append((image_id,gender,age,alz_class,ref_class))
-                    
-                    position = 0
-                    all_refslice_attribs = []
-                    for str_attrib in all_refslice_str_attribs:
-                        try:
-                            attrib = float(str_attrib)
-                        except ValueError:
-                            print('* Invalid attrib value({0}) entry for image ID {1} at {2}th atribute position. CSV file has problems'.format(str_attrib, image_id, position))
-                        all_refslice_attribs.append(attrib)
-                        position = position + 1
-                    
-                    X_data.append(all_refslice_attribs)
-                    Y_data.append(ref_slice)
-                    
-                    
-        except os.error:
-            print("*** ERROR: The csv file %s can not be readed (os.error in build_classes_dictionary)" % csv_file)    
-
-    else:
-        message = str("file %s does not exist!" % csv_file)
-        raise ValueError(message)
-    return X_data, Y_data, M_data, header
+#def read_refslices_data_from_csv(refslices_csv_file):
+#    X_data = []
+#    Y_data = []
+#    M_data = []
+#    ref_class = 1
+#    
+#    #demographics_dictionary = {}
+#    header = ''
+#
+#    if os.path.exists(refslices_csv_file):
+#
+#        try:
+#            with open(refslices_csv_file, 'r') as file:
+#                import build_refslices_train_set
+#                #print('CSV File received: ', csv_file)
+#                columns_dic = build_refslices_train_set.__REFSLICE_CSVFILE_COLUMNS_DICTIONARY
+#                
+##                __REFSLICE_CSVFILE_COLUMNS_DICTIONARY = {
+##                    'image_id' : 0,
+##                    'ref_slice' : 1,
+##                    'attribs_file' : 2,
+##                    'age' : 3,
+##                    'gender' : 4,
+##                    'ref_class' : 5
+##                    }
+#                
+#                reader = csv.reader(file)
+#                header = next(reader) 
+#                for row in reader:
+#                    image_id = row[columns_dic['image_id']] #row[0]
+#                    gender = row[columns_dic['gender']] #row[2]
+#                    age = row[columns_dic['age']] #row[3]
+#                    ref_class = row[columns_dic['ref_class']] #row[4]
+#                    attribs_file = row[columns_dic['attribs_file']] #
+#                    all_refslice_str_attribs = row[columns_dic['ref_class']+1:] #row[5:]
+#                    
+#                    try:
+#                        age = int(age)
+#
+#                    except ValueError:
+#                        print('* Invalid AGE({0}) entry for image ID {1}. CSV file has problems'.format(age, image_id))
+#
+#                    try:
+#                        ref_slice = int(row[1])                        
+#                    except ValueError:
+#                        print('* Invalid REF_SLICE({0}) entry for image ID {1}. CSV file has problems'.format(ref_slice, image_id))
+#                    
+#                    try:
+#                        alz_class = int(alz_class)
+#
+#                    except ValueError:
+#                        print('* Invalid ALZHEIMER CLASS({0}) entry for image ID {1}. CSV file has problems'.format(alz_class, image_id))
+#                    
+#                    M_data.append((image_id,gender,age,alz_class,ref_class))
+#                    
+#                    position = 0
+#                    all_refslice_attribs = []
+#                    for str_attrib in all_refslice_str_attribs:
+#                        try:
+#                            attrib = float(str_attrib)
+#                        except ValueError:
+#                            print('* Invalid attrib value({0}) entry for image ID {1} at {2}th atribute position. CSV file has problems'.format(str_attrib, image_id, position))
+#                        all_refslice_attribs.append(attrib)
+#                        position = position + 1
+#                    
+#                    X_data.append(all_refslice_attribs)
+#                    Y_data.append(ref_slice)
+#                    
+#                    
+#        except os.error:
+#            print("*** ERROR: The csv file %s can not be readed (os.error in build_classes_dictionary)" % refslices_csv_file)    
+#
+#    else:
+#        message = str("file %s does not exist!" % refslices_csv_file)
+#        raise ValueError(message)
+#    return X_data, Y_data, M_data, header
 
 
 def buildDataFrames(X_data, y_data, M_data, header='', debug=False):
@@ -744,19 +758,20 @@ def evaluate_model(X_data, y_data, model_name,
     #import pandas as pd
     non_float_columns = []
     
-    print('X_data:\n',X_data)
+    if debug:
+        print('X_data:\n',X_data)
     
     for col in X_data:
         if X_data[col].dtypes != np.float64:
             non_float_columns.append(col)
-        else:
-            print('found a np.float64 column at label ',col)
+#        else:
+#            print('found a np.float64 column at label ',col)
+    if len(non_float_columns) > 0:
+        print('* WARNING: non_float_columns in X_data: ',non_float_columns)
     
-    print('non_float_columns: ',non_float_columns)
     
-    
-    numeric_X_data = X_data.iloc[:, 4:]
-    print('numeric_X_data:\n',numeric_X_data)
+    #numeric_X_data = X_data.iloc[:, 4:]
+    #print('numeric_X_data:\n',numeric_X_data)
     #numeric_X_data = X_data
     #for col in non_float_columns:
     #    numeric_X_data = X_data.drop(col)
@@ -778,10 +793,13 @@ def evaluate_model(X_data, y_data, model_name,
         
         from sklearn import preprocessing
         scaler = preprocessing.StandardScaler()
-        X_fixed = scaler.fit_transform(numeric_X_data) # Fit your data on the scaler object
+        X_fixed = scaler.fit_transform(X_data) # Fit your data on the scaler object
     else:
-        X_fixed = numeric_X_data
+        X_fixed = X_data
         
+    if debug:
+        print('X_fixed:\n',X_fixed)
+    
     # Added to solve column-vector issue
     y_fixed = np.ravel(y_data)
      
@@ -793,12 +811,15 @@ def evaluate_model(X_data, y_data, model_name,
     
     if stratified_kfold:
         cv = model_selection.StratifiedKFold(n_splits=folds, random_state=cv_seed, shuffle=cv_shuffle)
-        both_indexes = cv.split(X_data, y_data)
+        both_indexes = cv.split(X_fixed, y_fixed)
     else:
         cv = model_selection.KFold(n_splits=folds, random_state=cv_seed, shuffle=cv_shuffle)
-        both_indexes = cv.split(X_data)
+        both_indexes = cv.split(X_fixed)
     
-    num_classes = len(np.unique(np.array(y_data))) # number of classes
+    num_classes = len(np.unique(np.array(y_fixed))) # number of classes
+    if debug:
+        print('num_classes=',num_classes)
+    
     conf_matrix = np.zeros(dtype=np.int64, shape=[num_classes,num_classes])
     
     #for train_indexes, test_indexes in all_train_and_test_indexes:
@@ -845,9 +866,13 @@ def evaluate_model(X_data, y_data, model_name,
         #all_mse.append(mse)
         all_acc.append(acc)
         all_cmat.append(cmat)
-        print('conf_matrix:\n',conf_matrix)
-        print('np.array(cmat)=\n',np.array(cmat))
+        if debug: 
+            print('current np.array(cmat)=\n',np.array(cmat))
+        
         conf_matrix = conf_matrix + np.array(cmat)
+        
+        if debug:
+            print('updated conf_matrix:\n',conf_matrix)
         #all_cmat.append(cmat)
         
         
@@ -861,13 +886,11 @@ def evaluate_model(X_data, y_data, model_name,
     np_all_acc = np.array(all_acc)
 
     # OPTIONAL STEP : Showing side by side y_pred x y_true x error
-    import pandas as pd
-    if cur_metric == 'mse':
-        all_errors = pd.DataFrame(data=np_all_mse)
-    else:
-        all_errors = pd.DataFrame(data=np_all_mae)
-    print('y_pred=',y_pred)
-    print('y_test=',y_test)
+#    import pandas as pd
+#    if cur_metric == 'mse':
+#        all_errors = pd.DataFrame(data=np_all_mse)
+#    else:
+#        all_errors = pd.DataFrame(data=np_all_mae)
 #    
 #    y_pred_test = pd.concat([pd.DataFrame(data=y_pred,columns='y_pred'),pd.DataFrame(data=y_test,columns='y_true')],axis=1,sort=False)
 #    y_pred_test_error = pd.concat([y_pred_test,pd.DataFrame(data=all_errors,columns='error')],axis=1,sort=False)
@@ -915,7 +938,20 @@ def evaluate_model(X_data, y_data, model_name,
     #'best_cmat':best_cmat, 'worst_acc':worst_acc, 'worst_cmat':worst_cmat, 'total_time':total_time, 'all_acc':np_all_acc, 'all_cmat':all_cmat, 'median_acc':median_acc, 'median_cmat':median_cmat}
     
     #metrics_list = [model_name,mean_acc,best_acc,std_acc,best_cmat,worst_acc,worst_cmat,total_time,all_acc,all_cmat,median_acc,median_cmat]
-    metrics_list = [model_name,mean_acc,best_acc,std_acc,worst_acc,conf_matrix,total_time,all_acc,median_acc]
+#       if metric == 'acc':
+#        metrics.append('name')
+#        metrics.append('mean_acc')
+#        metrics.append('std_acc')
+#        metrics.append('best_acc')
+#        #metrics.append('best_cmat')
+#        metrics.append('worst_acc')
+#        metrics.append('conf_matrix')
+#        metrics.append('total_time')
+#        metrics.append('all_acc_np')
+#        #metrics.append('all_cmat')
+#        metrics.append('median_acc')
+#        #metrics.append('median_cmat')
+    metrics_list = [model_name,mean_acc,std_acc,best_acc,worst_acc,conf_matrix,total_time,all_acc,median_acc]
     #metrics_list = [model_name,mean_mse,best_mse,std_mse,worst_mse,total_time,all_mse,median_mse]
 
     #metrics_names = all_metrics_names(cur_metric)
@@ -964,31 +1000,34 @@ def display_help(script_name=None):
 
 
 def main(argv):
-    csv_filename = '../../ref-slices_attributes-axis0.csv'
+    #csv_filename = '../../ref-slices_attributes-axis0.csv'
     
     global __USE_RESCALING, __USE_SMOTE, __CV_TYPE, __CV_MULTI_THREAD, __KCV_FOLDS, __CV_SHUFFLE
     global __MAXIMIZATION_PROBLEM, __CORES_NUM, __USE_STRATIFIED_KFOLD    
     
-    X_data, Y_data, M_data, head = read_refslices_data_from_csv(csv_filename)
+    import build_refslices_train_set
+
     
+    #X_data, Y_data, M_data, head = build_refslices_train_set.load_dataframes_from_csv(csv_filename)    
     #print('M_data:\n',M_data)
+    #X_pandas, y_pandas = buildDataFrames(X_data, Y_data, M_data, head, debug=True)
+    bplanes = [0,1,2]
     
-    X_pandas, y_pandas = buildDataFrames(X_data, Y_data, M_data, head, debug=True)
+    for plane in bplanes:
     
-    print('Retrived X_pandas from ',csv_filename,'\n',X_pandas)
-    
-    model_name = 'RF'
-    
-    dicionary_results = evaluate_model(X_pandas, y_pandas, model_name, __KCV_FOLDS, cv_seed=7, cv_shuffle=__CV_SHUFFLE,
-                                       smote=__USE_SMOTE, rescaling=__USE_RESCALING, cores_num=1, 
-                                       maximization=__MAXIMIZATION_PROBLEM, stratified_kfold=__USE_STRATIFIED_KFOLD,
-                                       debug=__VERBOSE)
-    
-    
-    
-    #rint('X_pandas:\n',X_pandas)
-    print('dicionary_results:',dicionary_results)
-    #buildDataFrames()
+        X_pandas, y_pandas, M_data, head = build_refslices_train_set.load_dataframes_from_csv(plane)
+        
+        model_name = 'RF'
+        
+        result_dic = evaluate_model(X_pandas, y_pandas, model_name, __KCV_FOLDS, cv_seed=7, cv_shuffle=__CV_SHUFFLE,
+                                           smote=__USE_SMOTE, rescaling=__USE_RESCALING, cores_num=1, 
+                                           maximization=__MAXIMIZATION_PROBLEM, stratified_kfold=__USE_STRATIFIED_KFOLD,
+                                           debug=__VERBOSE)
+        
+        
+        print('Result for plane {1}: mean_acc = {0} std_acc = {2}'.format(result_dic['mean_acc'],plane,result_dic['std_acc']))
+       
+        
     return 0
 
 

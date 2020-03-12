@@ -1070,13 +1070,10 @@ def main(argv):
 #
 #
 
-def refsp(all_attribs,
-          all_slice_amounts,
-          all_output_classes,
-          all_genders,
-          all_ages,
-          max_consecutive_slices, # length of slices range
-          number_of_groupings):
+def refsp(bplanes,
+          refslice_csv_file,
+          
+          ):
     return 0;
 
 
