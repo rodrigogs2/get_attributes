@@ -4,6 +4,10 @@
 Created on Sun Feb 23 19:02:35 2020
 
 @author: rodrigo
+
+This class builds the refslices database in order to use it to train a 
+classifier which help to answer if either a given slice is a ref slice or 
+it is not a ref slice
 """
 
 import pandas as pd
