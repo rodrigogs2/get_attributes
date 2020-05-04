@@ -94,6 +94,8 @@ __BLACK_LIST_ID = ['I288905','I288906','I120446','I120441','I120426','I120436','
 # Classifier parameters
 __MODEL_NAME = 'RF'
 __MODEL_DUMP_FILENAME = '../refslice_trained_model-plane'
+__SCALER_ALL_MEAN_NP_FILE = '../all_mean_from_scaler'
+__SCALER_ALL_STD_NP_FILE = '../all_std_from_scaler'
 
 # Default Specific Parameters for each Classifier
 __DEFAULT_KNN_K_VALUE = 9

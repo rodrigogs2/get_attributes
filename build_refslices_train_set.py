@@ -238,10 +238,10 @@ def get_image_ID(attributes_filename):
         return ''
 
 
-def find_attributes_file(target_image_id, attributes_dir=__ATTRIBUTES_DIR):
+def find_attributes_file(target_image_id, attributes_dir=__ATTRIBUTES_DIR, extension='.txt'):
     
     # Getting all attributes files from attributes directory
-    attribs_files = list_dir.list_files(attributes_dir,".txt")
+    attribs_files = list_dir.list_files(attributes_dir,extension)
     
     for file in attribs_files:
         file_image_id = get_image_ID(file)
