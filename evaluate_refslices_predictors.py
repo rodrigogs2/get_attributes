@@ -64,7 +64,7 @@ def build_models_dictionary(knn_k_value=3,lr_solver='sag',lr_multiclass='ovr',rf
     models_constructors.append(LinearDiscriminantAnalysis())
     models_constructors.append(DecisionTreeClassifier())
     models_constructors.append(GaussianNB())
-    models_constructors.append(SVC())
+    models_constructors.append(SVC(gamma='scale'))
     models_constructors.append(RandomForestClassifier(n_estimators=rf_estimators))
     models_constructors.append(LogisticRegression(solver=lr_solver, multi_class=lr_multiclass))
     #models_constructors.append()
@@ -74,14 +74,6 @@ def build_models_dictionary(knn_k_value=3,lr_solver='sag',lr_multiclass='ovr',rf
         
     return models_dic
 
-#Global Variables
-__VERBOSE = False
-
-# Global Slicing Arguments
-#global __ALL_ATTRIBS, __ALL_OUTPUT_VALUES, __BODY_PLANES, __MAX_SLICES_VALUES, __DEFAULT_MAX_CONSEC_SLICES, __DEFAULT_NUMBER_OF_GROUPINGS
-
-# Global Alzheimer Classification Problem Arguments
-#global __GENES_LOW_LIMITS, __GENES_UP_LIMITS, __DEFAULT_KNN_K_VALUE, __VERBOSE
 
 # Global Classifiers Parameters
 global __DEFAULT_KNN_K_VALUE, __DEFAULT_RF_NUM_ESTIMATORS, __DEFAULT_LR_SOLVER, __DEFAULT_LR_MULTICLASS
@@ -90,9 +82,6 @@ global __DEFAULT_KNN_K_VALUE, __DEFAULT_RF_NUM_ESTIMATORS, __DEFAULT_LR_SOLVER, 
 # Global Runtime Parameters
 global __MULTI_CPU_USAGE
 
-# Global Evolutionary Parameters
-#global __TOURNEAMENT_SIZE, __MUTATE_INDP, __CROSSOVER_INDP, __NUMBER_OF_GENERATIONS, __POPULATION_SIZE, __DEFAULT_TARGET_FITNESS, __DEFAULT_WORST_FITNESS
-
 # Data Cohort
 __VALID_GENDERS = ['M','F']
 __MIN_AGE = 0.0
@@ -100,32 +89,16 @@ __MAX_AGE = 200.0
 
 
 # Image Black List
-#BLACK_LIST_ID = []
 __BLACK_LIST_ID = ['I288905','I288906','I120446','I120441','I120426','I120436','I120423','I120416']
 
-# Slicing Arguments
-#__ALL_ATTRIBS = []
-#__ALL_OUTPUT_VALUES = []
-#__BODY_PLANES = []
-#__MAX_SLICES_VALUES = []
-#__MIN_SLICES_VALUES = []
-#__DEFAULT_MAX_CONSEC_SLICES = 20 #20
-#__DEFAULT_NUMBER_OF_GROUPINGS = 1
-
 # Classifier parameters
-__MODEL_NAME = 'KNN'
-#    models = []
-#    models.append(('KNN', KNeighborsClassifier(n_neighbors=knn_k_value)))
-#    models.append(('LDA', LinearDiscriminantAnalysis()))
-#    models.append(('CART', DecisionTreeClassifier()))
-#    models.append(('NB', GaussianNB()))
-#    models.append(('SVM', SVC()))
-#    models.append(('RF',RandomForestClassifier()))
-#    models.append(('LR', LogisticRegression(solver=lr_solver, multi_class=lr_multiclass)))
-
+__MODEL_NAME = 'RF'
+__MODEL_DUMP_FILENAME = '../refslice_trained_model-plane'
+__SCALER_ALL_MEAN_NP_FILE = '../all_mean_from_scaler'
+__SCALER_ALL_STD_NP_FILE = '../all_std_from_scaler'
 
 # Default Specific Parameters for each Classifier
-__DEFAULT_KNN_K_VALUE = 3
+__DEFAULT_KNN_K_VALUE = 9
 __DEFAULT_RF_NUM_ESTIMATORS = 100
 __DEFAULT_LR_SOLVER = 'sag'
 __DEFAULT_LR_MULTICLASS = 'ovr'
@@ -141,14 +114,14 @@ __MODEL_CONSTRUCTOR = __MODELS[__MODEL_NAME]
 
 
 __USE_RESCALING = True
-__USE_SMOTE = False
-__USE_PCA = True
+__USE_SMOTE = True
+__USE_PCA = False
 __CV_TYPE = 'kcv'
 __CV_MULTI_THREAD = True
 __CV_SHUFFLE = True
 __KCV_FOLDS = 10
-__USE_STRATIFIED_KFOLD = False
-__MAXIMIZATION_PROBLEM = False
+__USE_STRATIFIED_KFOLD = True
+__MAXIMIZATION_PROBLEM = True
 
 # Runtime Parameters
 __REFSP_RUN_ID = ''
@@ -590,69 +563,6 @@ def saveExperimentsDataToFile(exp_num, best_ind, bestIndividuals, generationsWit
 
 
 
-def read_refslices_data_from_csv(csv_file):
-    X_data = []
-    Y_data = []
-    M_data = []
-    ref_class = 1
-    
-    #demographics_dictionary = {}
-    header = ''
-
-    if os.path.exists(csv_file):
-
-        try:
-            with open(csv_file, 'r') as file:
-                #print('CSV File received: ', csv_file)
-                reader = csv.reader(file)
-                header = next(reader) 
-                for row in reader:
-                    image_id = row[0]
-                    gender = row[2]
-                    age = row[3]
-                    alz_class = row[4]
-                    all_refslice_str_attribs = row[5:]
-                    
-                    try:
-                        age = int(age)
-
-                    except ValueError:
-                        print('* Invalid AGE({0}) entry for image ID {1}. CSV file has problems'.format(age, image_id))
-
-                    try:
-                        ref_slice = int(row[1])                        
-                    except ValueError:
-                        print('* Invalid REF_SLICE({0}) entry for image ID {1}. CSV file has problems'.format(ref_slice, image_id))
-                    
-                    try:
-                        alz_class = int(alz_class)
-
-                    except ValueError:
-                        print('* Invalid ALZHEIMER CLASS({0}) entry for image ID {1}. CSV file has problems'.format(alz_class, image_id))
-                    
-                    M_data.append((image_id,gender,age,alz_class,ref_class))
-                    
-                    position = 0
-                    all_refslice_attribs = []
-                    for str_attrib in all_refslice_str_attribs:
-                        try:
-                            attrib = float(str_attrib)
-                        except ValueError:
-                            print('* Invalid attrib value({0}) entry for image ID {1} at {2}th atribute position. CSV file has problems'.format(str_attrib, image_id, position))
-                        all_refslice_attribs.append(attrib)
-                        position = position + 1
-                    
-                    X_data.append(all_refslice_attribs)
-                    Y_data.append(ref_slice)
-                    
-                    
-        except os.error:
-            print("*** ERROR: The csv file %s can not be readed (os.error in build_classes_dictionary)" % csv_file)    
-
-    else:
-        message = str("file %s does not exist!" % csv_file)
-        raise ValueError(message)
-    return X_data, Y_data, M_data, header
 
 
 def buildDataFrames(X_data, y_data, M_data, header='', debug=False):
@@ -691,47 +601,21 @@ def buildDataFrames(X_data, y_data, M_data, header='', debug=False):
     else:
         M_pandas = pd.DataFrame(data=M_data)
     
-#    image_ids = []
-#    all_genders = []
-#    all_ages = []
-#    
-#    for m in M_data:
-#        image_id,gender,age = m
-#        image_ids.append(image_id)
-#        all_genders.append(gender)
-#        all_ages.append(age)
-        
-    
-    # Reconding genders to numeric format
-    #num_genders = num_genders_list(all_genders)
-    #num_genders = all_genders
-    
-    # numeric Gender and Age columns inclusion
-    #image_id_series = pd.Series(image_ids,name=header[0])
-    #genders_series = pd.Series(num_genders,name=header[2])
-    #age_series = pd.Series(all_ages,name=header[3])
     
     # Formating all data as float
     X_pandas = X_pandas.astype(dtype=np.float64)
     
     # Concatanation
-    #X_pandas = pd.concat([X_pandas, genders_series, age_series],axis=1,ignore_index=True)
-    
-    #X_pandas = pd.concat([X_pandas, image_id_series, genders_series, age_series],axis=1,ignore_index=True)
-    
     X_final_pandas = pd.concat([M_pandas,X_pandas],axis=1,sort=False)
     
 
     
     return X_final_pandas, y_pandas
 
-#def evaluate_model(X_data, y_data, model_name,
-#                   folds, cur_metric='mse', cv_seed=7, cv_shuffle=True,
-#                   smote=True, rescaling=True, cores_num=1, 
-#                   maximization=True, stratified_kfold=True,
-#                   pca=False, debug=False):
-def evaluate_model(X_data, y_data, model_name,
-                   folds, cv_seed=7, cv_shuffle=True,
+
+
+def evaluate_model(X_raw, y_raw, model_name,
+                   folds, plane=0, cv_seed=7, cv_shuffle=True,
                    smote=True, rescaling=True, cores_num=1, 
                    maximization=True, stratified_kfold=True,
                    pca=False, debug=False):
@@ -744,71 +628,71 @@ def evaluate_model(X_data, y_data, model_name,
     #import pandas as pd
     non_float_columns = []
     
-    print('X_data:\n',X_data)
+    if debug:
+        print('X_raw:\n',X_raw)
     
-    for col in X_data:
-        if X_data[col].dtypes != np.float64:
-            non_float_columns.append(col)
-        else:
-            print('found a np.float64 column at label ',col)
+    if False:
+        for col in X_raw:
+            if X_raw[col].dtypes != np.float64:
+                non_float_columns.append(col)
     
-    print('non_float_columns: ',non_float_columns)
+        if len(non_float_columns) > 0:
+            print('* WARNING: non_float_columns in X_data: ',non_float_columns)
     
-    
-    numeric_X_data = X_data.iloc[:, 4:]
-    print('numeric_X_data:\n',numeric_X_data)
-    #numeric_X_data = X_data
-    #for col in non_float_columns:
-    #    numeric_X_data = X_data.drop(col)
-    #numeric_X_data = X_data.drop(non_float_columns)
-            
-            
-    
-    #to_be_dropped=pd.DataFrame(X_data.categorical).columns
-    #numeric_X_data = X_data.drop(to_be_dropped,axis=1)
-    #numeric_X_data = X_data.__get_numeric_data()
-    
-    #all_mae = []
-    #all_mse = []
-    
-
     
     # STEP 1: perform rescaling if required
     if rescaling:
         
         from sklearn import preprocessing
         scaler = preprocessing.StandardScaler()
-        X_fixed = scaler.fit_transform(numeric_X_data) # Fit your data on the scaler object
-    else:
-        X_fixed = numeric_X_data
+        X_scaled = scaler.fit_transform(X_raw) # Fit your data on the scaler object
         
+        #print('scaler.mean_ = \n{0}\nscanler.scale_ = \n{1}'.format(scaler.mean_,scaler.scale_))
+        X_fixed = X_scaled
+        np.save('../all_mean_from_scaler',scaler.mean_)
+        np.save('../all_std_from_scaler',scaler.scale_)
+        
+    else:
+        X_fixed = X_raw
+    
+            
+    if debug:
+        print('X_fixed:\n',X_fixed)
+    
     # Added to solve column-vector issue
-    y_fixed = np.ravel(y_data)
+    y_fixed = np.ravel(y_raw)
      
     # Validation setup
 
     from sklearn import model_selection 
-#    cv = model_selection.KFold(n_splits=folds, random_state=cv_seed, shuffle=cv_shuffle)
-#    both_indexes = cv.split(X_data)
     
     if stratified_kfold:
         cv = model_selection.StratifiedKFold(n_splits=folds, random_state=cv_seed, shuffle=cv_shuffle)
-        both_indexes = cv.split(X_data, y_data)
-    else:
+        both_indexes = cv.split(X_fixed, y_fixed)
+        
+        
+    else: # Still not running...
         cv = model_selection.KFold(n_splits=folds, random_state=cv_seed, shuffle=cv_shuffle)
-        both_indexes = cv.split(X_data)
-    
-    num_classes = len(np.unique(np.array(y_data))) # number of classes
+        both_indexes = cv.split(X_fixed)
+
+        
+    num_classes = len(np.unique(np.array(y_fixed))) # number of classes
     conf_matrix = np.zeros(dtype=np.int64, shape=[num_classes,num_classes])
     
+    if debug:
+        print('num_classes=',num_classes)
+        print('conf_matrix.shape=',conf_matrix.shape)
+    
+    
     #for train_indexes, test_indexes in all_train_and_test_indexes:
-    for train_indexes, test_indexes in both_indexes:
-        
+    for train_index, test_index in both_indexes:
+
         # STEP 2: split data between test and train sets
-        X_train = X_fixed[train_indexes]
-        X_test = X_fixed[test_indexes]
-        y_train = y_fixed[train_indexes]
-        y_test = y_fixed[test_indexes]
+        X_test = X_fixed[test_index]
+        X_train = X_fixed[train_index]
+        
+        y_train = y_fixed[train_index]
+        y_test = y_fixed[test_index]
         
         # OPTIONAL: Apply PCA to reduce dimensionality
         if pca:
@@ -830,6 +714,12 @@ def evaluate_model(X_data, y_data, model_name,
         # STEP 4: Training (Fit) Model
         model.fit(X_train, y_train)
         
+        # OPTIONAL: Saving or updatting trainned model
+        global __MODEL_DUMP_FILENAME #= '../refslice_trained_model-'
+        from joblib import dump
+        dump_filename = '{0}{1}-{2}.joblib'.format(__MODEL_DUMP_FILENAME,plane,model_name)
+        dump(model, dump_filename) 
+        
         # STEP 5: Testing Model (Making Predictions)
         y_pred = model.predict(X_test) # testing
         y_pred = np.round(y_pred)
@@ -837,88 +727,43 @@ def evaluate_model(X_data, y_data, model_name,
         # STEP 6: Building Evaluation Metrics
         acc = metrics.accuracy_score(y_test, y_pred)
         cmat = metrics.confusion_matrix(y_test,y_pred,labels=None,sample_weight=None)
-        #mae = metrics.mean_absolute_error(y_test, y_pred)
-        #mse = metrics.mean_squared_error(y_test, y_pred)
 
-#        print('acc={0:.4}'.format(acc))
-        #all_mae.append(mae)
-        #all_mse.append(mse)
         all_acc.append(acc)
         all_cmat.append(cmat)
-        print('conf_matrix:\n',conf_matrix)
-        print('np.array(cmat)=\n',np.array(cmat))
+        if debug: 
+            print('current np.array(cmat)=\n',np.array(cmat))
+        
         conf_matrix = conf_matrix + np.array(cmat)
-        #all_cmat.append(cmat)
         
-        
-        
-        #cv_results = model_selection.cross_val_score(model, X_data, y_data, cv=kfold, scoring=metric, n_jobs=cores_num)
-        
+        if debug:
+            print('updated conf_matrix:\n',conf_matrix)
     	
     # Converting to Numpy Array to use its statiscs pre-built functions
-    #np_all_mae = np.round(np.array(all_mae))
-    #np_all_mse = np.round(np.array(all_mse))
     np_all_acc = np.array(all_acc)
 
-    # OPTIONAL STEP : Showing side by side y_pred x y_true x error
-    import pandas as pd
-    if cur_metric == 'mse':
-        all_errors = pd.DataFrame(data=np_all_mse)
-    else:
-        all_errors = pd.DataFrame(data=np_all_mae)
-    print('y_pred=',y_pred)
-    print('y_test=',y_test)
-#    
-#    y_pred_test = pd.concat([pd.DataFrame(data=y_pred,columns='y_pred'),pd.DataFrame(data=y_test,columns='y_true')],axis=1,sort=False)
-#    y_pred_test_error = pd.concat([y_pred_test,pd.DataFrame(data=all_errors,columns='error')],axis=1,sort=False)
-#    print('y_pred_test_error=\n',y_pred_test_error)
-    
-#    print('length of all_acc={0} and np_all_acc={1}'.format(len(all_acc),len(np_all_acc)))
-    
+   
     # Finding position of the best and the worst individual
     best_acc_pos  = np.argmax(np_all_acc) if maximization else np.argmin(np_all_acc)
     worst_acc_pos = np.argmin(np_all_acc) if maximization else np.argmax(np_all_acc)
-#    best_mae_pos  = np.argmax(np_all_mae) if maximization else np.argmin(np_all_mae)
-#    worst_mae_pos = np.argmin(np_all_mae) if maximization else np.argmax(np_all_mae)
-#    best_mse_pos  = np.argmax(np_all_mse) if maximization else np.argmin(np_all_mse)
-#    worst_mse_pos = np.argmin(np_all_mse) if maximization else np.argmax(np_all_mse)
     median_pos = folds//2
     
-#    best_mae = np_all_mae[best_mae_pos]
-#    best_mse = np_all_mse[best_mse_pos]
     best_acc = np_all_acc[best_acc_pos]
-    #best_cmat = all_cmat[best_acc_pos]
-#    worst_mae = all_mae[worst_mae_pos]
-#    worst_mse = all_mse[worst_mse_pos]
     worst_acc = all_acc[worst_acc_pos]
-    #worst_cmat = all_cmat[worst_acc_pos]
+
     
     mean_acc = np_all_acc.mean()
-    #mean_mae = np_all_mae.mean()
-    #mean_mse = np_all_mse.mean()
-    
-    #median_mae = np_all_mae[median_pos] #np_all_acc[folds//2] if folds % 2 == 1 else (np_all_acc[(folds+1)//2] + np_all_acc[(folds-1)//2])//2
-    #median_mse = np_all_mse[median_pos]
     #median_cmat = all_cmat[median_pos]
     median_acc = all_acc[median_pos]
     
     std_acc = np_all_acc.std()
-#    std_mae = np_all_mae.std()
-#    std_mse = np_all_mse.std()
-    
+
     
     # Calculing execution time
     end_time = time.time()
     total_time = end_time - start_time
-    
-    #dic = {'name':name, 'mean_acc':mean_acc, 'std_acc':std_acc, 'best_acc':best_acc, 
-    #'best_cmat':best_cmat, 'worst_acc':worst_acc, 'worst_cmat':worst_cmat, 'total_time':total_time, 'all_acc':np_all_acc, 'all_cmat':all_cmat, 'median_acc':median_acc, 'median_cmat':median_cmat}
-    
-    #metrics_list = [model_name,mean_acc,best_acc,std_acc,best_cmat,worst_acc,worst_cmat,total_time,all_acc,all_cmat,median_acc,median_cmat]
-    metrics_list = [model_name,mean_acc,best_acc,std_acc,worst_acc,conf_matrix,total_time,all_acc,median_acc]
-    #metrics_list = [model_name,mean_mse,best_mse,std_mse,worst_mse,total_time,all_mse,median_mse]
 
-    #metrics_names = all_metrics_names(cur_metric)
+    metrics_list = [model_name,mean_acc,std_acc,best_acc,worst_acc,conf_matrix,total_time,all_acc,median_acc]
+
     metrics_names = all_metrics_names()
 
     dic = {}
@@ -926,18 +771,6 @@ def evaluate_model(X_data, y_data, model_name,
         name = metrics_names[metric_num]
         dic[name] = metrics_list[metric_num]
         
-#    dic['name'] = name
-#    dic['mean_acc'] = mean_acc
-#    dic['std_acc'] = std_acc
-#    dic['best_acc'] = best_acc
-#    dic['best_cmat'] = best_cmat
-#    dic['worst_acc'] = worst_acc
-#    dic['worst_cmat'] = worst_cmat
-#    dic['total_time'] = total_time
-#    dic['all_acc'] = all_acc
-#    dic['all_cmat'] = all_cmat
-#    dic['median_acc'] = median_acc
-#    dic['median_cmat'] = median_cmat
     
     return dic
 
@@ -964,31 +797,47 @@ def display_help(script_name=None):
 
 
 def main(argv):
-    csv_filename = '../../ref-slices_attributes-axis0.csv'
+    #csv_filename = '../../ref-slices_attributes-axis0.csv'
+    
+    global __MODEL_DUMP_FILENAME
+    #__MODEL_DUMP_FILENAME = '../ref_slice_predictor-axis'
     
     global __USE_RESCALING, __USE_SMOTE, __CV_TYPE, __CV_MULTI_THREAD, __KCV_FOLDS, __CV_SHUFFLE
     global __MAXIMIZATION_PROBLEM, __CORES_NUM, __USE_STRATIFIED_KFOLD    
     
-    X_data, Y_data, M_data, head = read_refslices_data_from_csv(csv_filename)
+    import build_refslices_train_set
+    from joblib import load,dump
+    import os.path
+
     
+    #X_data, Y_data, M_data, head = build_refslices_train_set.load_dataframes_from_csv(csv_filename)    
     #print('M_data:\n',M_data)
+    #X_pandas, y_pandas = buildDataFrames(X_data, Y_data, M_data, head, debug=True)
+    bplanes = [0,1,2]
     
-    X_pandas, y_pandas = buildDataFrames(X_data, Y_data, M_data, head, debug=True)
+    print('+++ Training a model...')
+    for plane in bplanes:
+        X_pandas, y_pandas, M_data, head = build_refslices_train_set.load_dataframes_from_csv(plane)
+        model_name = 'RF'
+        
+        
+        result_dic = evaluate_model(X_pandas, y_pandas, model_name, __KCV_FOLDS, plane, cv_seed=7, cv_shuffle=__CV_SHUFFLE,
+                                           smote=__USE_SMOTE, rescaling=__USE_RESCALING, cores_num=1, 
+                                           maximization=__MAXIMIZATION_PROBLEM, stratified_kfold=__USE_STRATIFIED_KFOLD,
+                                           debug=__VERBOSE)
+        
+        
+        print('Results for trained model for plane {1}: mean_acc = {0} std_acc = {2}'.format(result_dic['mean_acc'],plane,result_dic['std_acc']))
+       
     
-    print('Retrived X_pandas from ',csv_filename,'\n',X_pandas)
-    
-    model_name = 'RF'
-    
-    dicionary_results = evaluate_model(X_pandas, y_pandas, model_name, __KCV_FOLDS, cv_seed=7, cv_shuffle=__CV_SHUFFLE,
-                                       smote=__USE_SMOTE, rescaling=__USE_RESCALING, cores_num=1, 
-                                       maximization=__MAXIMIZATION_PROBLEM, stratified_kfold=__USE_STRATIFIED_KFOLD,
-                                       debug=__VERBOSE)
-    
-    
-    
-    #rint('X_pandas:\n',X_pandas)
-    print('dicionary_results:',dicionary_results)
-    #buildDataFrames()
+    for plane in bplanes:
+        print('+++ Loading trained model for plane {0}...'.format(plane))
+        dump_filename = '{0}{1}-{2}.joblib'.format(__MODEL_DUMP_FILENAME,plane,model_name)
+        already_trained_model = load(dump_filename)
+        
+        
+        
+        
     return 0
 
 
@@ -1006,7 +855,7 @@ def main_refsp(argv):
     csv_file = ''
     attribs_dir = ''
     out_dir = './'
-    model = 'KNN'
+    model = 'RF'
     seeds_file = ''
     csv_file_ok = False
     attribs_dir_ok = False
