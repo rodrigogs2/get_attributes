@@ -445,7 +445,7 @@ def main(argv):
     
     # Use this arguments to set the input directory of attributes files
     #attributes_dir = "../../attributes_amostra/"
-    attributes_dir = "../../attributes2/"
+    attributes_dir = "../attributes/"
     csv_file = './ADNI1_Complete_All_Yr_3T.csv' 
     # Getting all files
     

@@ -1,0 +1,12 @@
+matplotlib==3.1.0
+scikit-learn==0.20.3
+pandas==0.24.2
+nibabel==2.4.0
+numpy==1.16.3
+mahotas==1.4.5
+joblib==0.14.1
+imbalanced-learn==0.4.3
+imageio==2.5.0
+deap==1.2.2
+Babel==2.6.0
+scipy==1.2.1

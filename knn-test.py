@@ -6,22 +6,22 @@ Created on Wed Jan 30 08:30:02 2019
 @author: rodrigo
 """
 
-#import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
 import numpy as np
-#from sklearn import datasets
+from sklearn import datasets
 #import tensorflow as tf
-#import os, cvs, sys
-#import list_dir
+import os, cvs, sys
+import list_dir
 import loadattribs
-
+import sklearn
 
 # csv description file
 
 
 # Use this arguments to set the input directory of attributes files
-attributes_dir = "/home/rodrigo/Downloads/fake_output_dir2/"
+attributes_dir = "../attributes"
 
-'''
+
 # Getting all files names
 attribs_files = list_dir.list_files(attributes_dir,".txt")
 
@@ -54,12 +54,16 @@ for n in range(first_file, total_printed_files):
 print('-Total memory usage to load all the {0} data files is:\n\t\t{1} bytes'.format(total_printed_files, total_memory_usage))
 
 #attribs,body_plane,slice_num = loadattribs.load_attribs_and_metadata(attribs_files[0])
-'''
 
 
-csv_file = '/home/rodrigo/Documents/_phd/csv_files/ADNI1_Complete_All_Yr_3T.csv' 
+
+csv_file = './ADNI1_Complete_All_Yr_3T.csv' 
 # load data
-attribs, body_axis, slice_numbers, slice_amounts, output_classes = loadattribs.load_all_data(attributes_dir, csv_file)
+all_genders = []
+array_all_ages = []
+image_id_dictionary = []
+
+attribs, body_axis, slice_numbers, slice_amounts, output_classes, all_genders, aarray_all_ages, image_id_dictionary = loadattribs.load_all_data(attributes_dir, csv_file)
 
 print('* all data list length=',len(attribs))
 print('* an image attributes shape (retrived from all data)=',attribs[0].shape)
@@ -67,8 +71,11 @@ print('* an image attributes shape (retrived from all data)=',attribs[0].shape)
 plane = 1
 first_slice = 70
 total_slices = 5
-partition = loadattribs.get_attributes_partition(attribs,slice_amounts,plane,first_slice,total_slices)
+#partition = loadattribs.get_attributes_partition(attribs,slice_amounts,plane,first_slice,total_slices)
+partition = loadattribs.getAttribsPartitionFromSingleSlicesGrouping(attribs,slice_amounts,plane,first_slice,total_slices)
+
 print('* a partition data shape=',partition.shape)
+
 
 new_dimensions = (partition.shape[0],partition.shape[1]*partition.shape[2])
 #new_partition = np.reshape(partition,total_groupings new_dimensions)
@@ -163,9 +170,9 @@ print('KNN (k={0}) accuracy =\t{1}'.format(paramk, metrics.accuracy_score(y_test
 
 
 
-'''
+
 # Iris dataset load
-iris = datasets.load_iris()
+iris = sklearn.datasets.load_iris()
 x_vals = np.array([x[0:4] for x in iris.data])
 y_vals = np.array(iris.target)
 
@@ -232,4 +239,4 @@ for pred, actual in zip(prediction_outcome, y_vals_test):
         accuracy += 1
 
 print("final accuracy:", accuracy / len(prediction_outcome))
-'''
+

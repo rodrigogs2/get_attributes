@@ -192,8 +192,8 @@ def main(argv):
     
     # Use this arguments to set the input directory of attributes files
     __USE_SAMPLE_DATA_DIR = False
-    __SAMPLE_DATA_DIR = "../../attributes_amostra"
-    __FULL_DATA_DIR = "../../attributes2"
+    __SAMPLE_DATA_DIR = "../attributes"
+    __FULL_DATA_DIR = "../attributes"
     
     attributes_dir = __FULL_DATA_DIR
     csv_file = './ADNI1_Complete_All_Yr_3T.csv'
@@ -205,7 +205,10 @@ def main(argv):
     
     start_time = time.time()
     print('Loading all atributes data... ', end='')
-    attribs, body_planes, slice_num, slice_amounts, output_classes = loadattribs.load_all_data(attributes_dir, csv_file)
+    all_genders = []
+    array_all_ages = []
+    image_id_dictionary = {}
+    attribs, body_planes, slice_num, slice_amounts, output_classes,all_genders, array_all_ages, image_id_dictionary = loadattribs.load_all_data(attributes_dir, csv_file)
     end_time = time.time()
     total_time = end_time - start_time
     print('done (total time to load: {0})'.format(total_time))
