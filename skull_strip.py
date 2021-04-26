@@ -27,10 +27,9 @@ from multiprocessing import Pool
 #__OUTPUT_PREFIX = "FLIRT_"
 
 #__BET_BIN = "bet"
-__FLIRT_PREFIX = "FLIRT_"
-__FLIRT_BIN = "flirt"
+__BET_PREFIX = "BET_"
+__BET_BIN = "bet"
 __FIXFILE_BIN = "fslchfiletype"
-__STD_REF = USER = "{0}/data/standard/MNI152_T1_1mm_brain".format(os.getenv('FSLDIR'))
 
 def run_command(command_str,verbose=False):
     process = subprocess.Popen(shlex.split(command_str), stdout=subprocess.PIPE, encoding='utf8')
@@ -47,28 +46,15 @@ def run_command(command_str,verbose=False):
     return rc, lastline
     
 
-def run_flirt(input_file,output_file,ref_file=None,verbose=False,xfm=False):
-    global __STD_REF
-    xfm_option = ''
-
-    if not ref_file:
-        ref = ref_file
-    else:
-        ref = __STD_REF
-
-    if xfm:
-        xfm_option = '-applyxfm'
-	
-    flirt_command = "{0} -in {1} -out {2} -ref {3} {4}".format(
-	__FLIRT_BIN, 
+def run_bet(input_file,output_file,verbose=False):
+    bet_command = "{0} {1} {2}".format(
+	__BET_BIN, 
 	input_file, 
-	output_file, 
-	ref, 
-	xfm_option)
+	output_file)
     if verbose:
-        print("*** Running flirt using: {0}".format(flirt_command))
+        print("*** Running bet using: {0}".format(bet_command))
 
-    return run_command(flirt_command)[0],output_file
+    return run_command(bet_command)[0],output_file
 
 
 def run_fixfiletype(filename):
@@ -101,18 +87,16 @@ def build_output_full_filename(input_full_filename, output_directory):
 
     
 
-def normalize_brain(
+def extract_brain(
         input_full_filename,
         output_directory,
-        template,
         verbose=False,
-        resume_task=False,
-        use_xfm=False):
+        resume_task=False):
 
     # Start task only if input file exists
     if os.path.exists(input_full_filename):
         if verbose:
-            print ("Initializing Normalization to file: %s" % input_full_filename)
+            print ("Initializing Brain Extraction from file: %s" % input_full_filename)
 
         output_full_filename = build_output_full_filename(
                 input_full_filename,
@@ -137,18 +121,18 @@ def normalize_brain(
             except os.error:
                 raise ValueError("*** File %s already exists but can not be removed.", nii_file)
 
-        # Try to run flirt to normalize input brain using standard template
+        # Try to run bet to extract brain from input file
         try:
-            normalized_brain = run_flirt(input_full_filename, output_full_filename, template, use_xfm)[1]
+            extracted_brain = run_bet(input_full_filename, output_full_filename)[1]
         except OSError as error:
-            print("\n * ERROR: Can't normalize brain from file {0}".format(input_full_filename))
+            print("\n * ERROR: Can not extract brain from file {0}".format(input_full_filename))
             print(error)
 
         # Fix file type by forcing to be .nii (NIFTI)
         try:
-            fixed_file = run_fixfiletype(normalized_brain)
+            fixed_file = run_fixfiletype(extracted_brain)
         except OSError as error:
-            print("\n * ERROR: Can't fix type of file {0}".format(normalized_brain))
+            print("\n * ERROR: Can not fix type of file {0}".format(extracted_brain))
             print(error)
 
         return fixed_file
@@ -170,51 +154,36 @@ def list_files(input_dir,extention=".nii"):
     return returned_files
 
 
-def normalize_all_brains(
+def extract_all_brains(
 		input_path, 
 		output_directory,
-		ref_file=None,
 		verbose=False,
 		resume_task=False,
 		multi_cpu=False,
-		file_type=".nii",
-		xfm=False):
-    if ref_file:
-        if not os.path.exists("{0}.nii.gz".format(ref_file)):
-            print("Template file {0} doesnt exist! Leaving now...".format(ref_file))
-            sys.exit(1)
-        else:
-            template = ref_file
-    else:
-        global __STD_REF
-        template = __STD_REF
+		file_type=".nii"):
         
     files = list_files(input_path,file_type)
 
     if files:
         if verbose:
-            print("Files to be processed: ", files)
+            print("Files to be processed: ", len(files))
         
         if not multi_cpu:
             for filename in files:
-                normalize_brain(
+                extract_brain(
 			filename,
 			output_directory,
-			template,
 			verbose,
-			resume_task,
-			xfm)
+			resume_task)
         else:
             cores_num = multiprocessing.cpu_count()
             with Pool(cores_num) as p:
                 from functools import partial
                 p.map(
-                    partial(normalize_brain,
+                    partial(extract_brain,
                             output_directory=output_directory,
-                            template=template,
                             verbose=verbose,
-                            resume_task=resume_task,
-                            use_xfm=xfm),
+                            resume_task=resume_task),
                     files)
 
     
@@ -228,25 +197,20 @@ def display_help(script_name=None):
     print('\t-m, --multicpu\tset on computation over all cores (default: multicore is off)')
     print('\t-v, --verbose\tenables verbose mode (default: disabled)')
     print('\t-r, --resume\tresume task: output files are not overwritten (default: resume is off)')
-    print('\t-x, --xfm\tapplies xfm on normalization process (default: xfm is off)')
-
 
 
 def main(argv):
     
     inputpath = ''
     outputdir = ''
-    template = ''
     ifile_ok = False
     ofile_ok = False
-    template_ok = False
     verbose_ok = False
     multi_cpu_ok = False
     resume_task_ok = False
-    xfm_ok = False
 
     try:
-        opts, args = getopt.getopt(argv[1:],"hi:o:t:vmrx",["ifile=","odir=","template=","verbose","multicpu","resume","xfm"]) 
+        opts, args = getopt.getopt(argv[1:],"hi:o:vmr",["ifile=","odir=","verbose","multicpu","resume"]) 
     except getopt.GetoptError:
         display_help()
         sys.exit(1)
@@ -260,35 +224,23 @@ def main(argv):
         elif opt in ("-o", "--odir"):
             outputdir = arg
             ofile_ok = True
-        elif opt in ("-t", "--template"):
-            template = arg
-            template_ok = True
         elif opt in ("-v", "--verbose"):
             verbose_ok = True
         elif opt in ("-m", "--multicpu"):
             multi_cpu_ok = True
         elif opt in ("-r", "--resume"):
             resume_task_ok = True
-        elif opt in ("-x", "--xfm"):
-            xfm_ok = True
-
     
     if ifile_ok and ofile_ok:
         print ('Output directory is: ', outputdir)
         print ('Input used: ', inputpath)
     
-        if not template_ok:
-            global __STD_REF
-            template = __STD_REF
-        
-        normalize_all_brains(
+        extract_all_brains(
 			input_path=inputpath,
 			output_directory=outputdir,
-			ref_file=template,
 			verbose=verbose_ok,
                         resume_task=resume_task_ok,
-			multi_cpu=multi_cpu_ok,
-			xfm=xfm_ok)
+			multi_cpu=multi_cpu_ok)
         
     else:
         display_help()

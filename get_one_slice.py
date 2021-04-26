@@ -333,12 +333,12 @@ def extract_all_slices_to_png_files(nii_filename,axis=None,output_path=None):
 
 # Temporary Variables (should be removed later)
 img_data_shape = ''
-input_full_filename = '/home/rodrigo/Downloads/ADNI_136_S_0184_MR_MPR____N3__Scaled_Br_20090708094745554_S64785_I148265.nii'
+input_full_filename = '../Brains/ADNI_002_S_0413_MR_MPR____N3__Scaled_2_Br_20081124142730828_S22683_I128346.nii'
 input_filepath,input_filename = os.path.split(input_full_filename)
 input_filename_without_extension = os.path.splitext(input_filename)[0] 
 
 
-fake_output_dir = '/home/rodrigo/Downloads/fake_output_dir2/'
+fake_output_dir = '../slices/'
 built_png_filename = build_png_filename_from_slice(input_full_filename, 0, 80, fake_output_dir)
 
 print  ('*** input_file_path=', input_filepath,
