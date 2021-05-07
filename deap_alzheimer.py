@@ -88,7 +88,7 @@ def build_models_dictionary(knn_k_value=3,lr_solver='sag',lr_multiclass='ovr'):
 #global __TOURNEAMENT_SIZE, __MUTATE_INDP, __CROSSOVER_INDP, __NUMBER_OF_GENERATIONS, __POPULATION_SIZE, __DEFAULT_TARGET_FITNESS, __DEFAULT_WORST_FITNESS
 
 # Data Cohort
-__VALID_GENDERS = ['M','F']
+__VALID_GENDERS = ['M']
 __MIN_AGE = 0.0
 __MAX_AGE = 200.0
 
